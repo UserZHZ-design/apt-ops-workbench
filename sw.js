@@ -1,5 +1,5 @@
 // Service Worker for 长租公寓运营工作台 PWA
-const CACHE_NAME = 'apt-ops-v40';
+const CACHE_NAME = 'apt-ops-v41';
 const OFFLINE_URL = '/index.html';
 
 const PRE_CACHE = [
