@@ -1,35 +1,54 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-每周热榜 + BGM 数据抓取脚本
-由 GitHub Action 每周一 09:00（北京时间）调用，抓取 uapis.cn 免费热榜接口，
-生成 data/latest.json 提交回仓库，供静态 PWA 直接读取（同域、无跨域问题）。
+每周热榜 + BGM + 爆款拆解 + 选题日历 + 竞品监控 + 学习计划 数据生成脚本
+由 GitHub Action 定时调用：
+  - 每周一 09:00 北京时间：热榜 + BGM + 爆款拆解 + 选题日历 + 竞品监控
+  - 每月1号 09:00 北京时间：学习计划（月度更新）
 
-免费、无需 Key。若全部平台抓取失败则跳过本次更新，保留旧数据，绝不破坏站点。
+数据源：
+  1. uapis.cn 免费热榜接口（无需 Key）
+  2. DeepSeek API（需环境变量 DEEPSEEK_API_KEY，从 GitHub Secret 注入）
+
+若 DeepSeek Key 未配置或调用失败，对应模块跳过不破坏已有数据。
+若全部平台热榜抓取失败，整体跳过。
 """
 import json
 import os
 import sys
 import datetime
 import urllib.request
+import urllib.error
 
+# ── 配置 ──────────────────────────────────────────────
 PLATFORMS = {
-    "douyin": "douyin",     # 抖音（主战场）
-    "rednote": "rednote",   # 小红书（主战场）
-    "weibo": "weibo",       # 微博
-    "zhihu": "zhihu",       # 知乎
+    "douyin": "douyin",
+    "rednote": "rednote",
+    "weibo": "weibo",
+    "zhihu": "zhihu",
 }
 API_URL = "https://uapis.cn/api/v1/misc/hotboard?type={}"
 UA = {
-    "User-Agent": "Mozilla/5.0 (compatible; apt-ops-workbench/1.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; apt-ops-workbench/2.0)",
     "Origin": "https://userzhz-design.github.io",
 }
-TOP_N = 30          # 每个平台抓取条数
-BGM_NAME_LIMIT = 40 # BGM/话题名字列表上限
+TOP_N = 30
+BGM_NAME_LIMIT = 40
+DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+# 竞品列表（固定，用于竞品监控 prompt）
+COMPETITORS = [
+    {"name": "自如租房", "desc": "长租公寓头部品牌，毕业季营销强"},
+    {"name": "魔方公寓", "desc": "集中式公寓，社区社交活动多"},
+    {"name": "V领地", "desc": "青年公寓，改造类内容出圈"},
+    {"name": "城家公寓", "desc": "华润旗下，情侣/家庭向内容多"},
+]
+
+# ── 工具函数 ──────────────────────────────────────────
 
 
 def monday_of(d):
-    """返回 d 所在周的周一日期"""
     return d - datetime.timedelta(days=d.weekday())
 
 
@@ -49,8 +68,35 @@ def week_range_label(d):
     )
 
 
+def next_week_days(today):
+    """返回下周一到周日的日期标签列表"""
+    mon = monday_of(today) + datetime.timedelta(days=7)
+    days = []
+    names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    for i, n in enumerate(names):
+        d = mon + datetime.timedelta(days=i)
+        days.append("%s %d/%d" % (n, d.month, d.day))
+    return days
+
+
+def season_context(today):
+    """根据月份返回季节+运营节奏提示"""
+    m = today.month
+    if 6 <= m <= 7:
+        return "6-7月毕业季，应届毕业生是核心人群，内容方向：毕业租房、首次独居、宿舍vs公寓对比、搬家攻略"
+    elif 8 <= m <= 9:
+        return "8-9月换租季+金九银十，内容方向：换租对比、价格变化、保租房新政、通勤优化、情侣合租"
+    elif 10 <= m <= 11:
+        return "10-11月年末冲刺，内容方向：年终盘点、租房账单、冬日保暖改造、宠物友好、年底续约优惠"
+    elif m == 12 or m == 1:
+        return "12-1月春节前后，内容方向：新年规划、返乡vs留沪、年后返工租房准备、春节租房避坑"
+    elif 2 <= m <= 3:
+        return "2-3月春招季，内容方向：春招租房、职场新人指南、预算规划、地铁沿线房源"
+    else:  # 4-5
+        return "4-5月春夏过渡，内容方向：租房改造、夏日清凉好房、毕业季预热、实习租房"
+
+
 def fetch_platform(ptype, retries=2):
-    """抓取单个平台热榜，返回 list[dict] 或 None"""
     last_err = None
     for attempt in range(retries + 1):
         try:
@@ -69,7 +115,7 @@ def fetch_platform(ptype, retries=2):
                     "cover": it.get("cover") or extra.get("cover") or "",
                 })
             return out
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             last_err = e
             if attempt < retries:
                 continue
@@ -77,12 +123,277 @@ def fetch_platform(ptype, retries=2):
     return None
 
 
+def call_deepseek(system_prompt, user_prompt, retries=2):
+    """调用 DeepSeek API，返回文本内容。失败返回 None。"""
+    key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not key:
+        print("  [skip] DEEPSEEK_API_KEY 未配置，跳过 AI 生成", file=sys.stderr)
+        return None
+    body = json.dumps({
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.8,
+        "max_tokens": 4000,
+    }).encode("utf-8")
+    headers = {
+        "Authorization": "Bearer %s" % key,
+        "Content-Type": "application/json",
+    }
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(DEEPSEEK_API, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if text:
+                return text.strip()
+            print("  [warn] DeepSeek 返回空内容", file=sys.stderr)
+            return None
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                continue
+    print("  [warn] DeepSeek 调用失败: %s" % last_err, file=sys.stderr)
+    return None
+
+
+def parse_json_from_text(text):
+    """尝试从 AI 返回的文本中提取 JSON（处理 markdown 代码块包裹）"""
+    if not text:
+        return None
+    # 去掉可能的 ```json / ``` 包裹
+    t = text.strip()
+    if t.startswith("```"):
+        lines = t.split("\n")
+        # 去掉首行 ```json 或 ```
+        lines = lines[1:]
+        # 去掉末尾 ```
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        t = "\n".join(lines).strip()
+    try:
+        return json.loads(t)
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
+# ── 各模块生成函数 ────────────────────────────────────
+
+
+def generate_analysis(hot_topics_text, today):
+    """爆款拆解：基于本周热梗生成 5 条高赞 + 5 条高播放 + 共性归纳"""
+    week = iso_week_label(today)
+    season = season_context(today)
+    system = """你是资深短视频运营分析师，专注长租公寓/租房赛道（抖音+小红书）。
+你擅长从热门话题中提炼可复制的爆款视频拆解。
+
+用户会提供本周热门话题列表和当前季节运营背景。
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "like_winners": [
+    {
+      "title": "视频标题（带书名号）",
+      "likes": "点赞数（如 8,234）",
+      "plays": "播放量（如 12.5万播放）",
+      "hook": "前3秒钩子台词（直接引用风格）",
+      "structure": "内容结构描述（分镜概要）",
+      "reason": "爆款原因分析（一句话）",
+      "bgm": "推荐BGM名称"
+    }
+  ],
+  "view_winners": [
+    { 同上结构 }
+  ],
+  "summary": {
+    "type_dist": "类型分布（如 价格对比型 30% | 情感故事型 25% ...）",
+    "duration": "视频时长分布",
+    "bgm_preference": "BGM偏好",
+    "cover_style": "封面风格",
+    "publish_time": "最佳发布时间分布"
+  }
+}
+
+要求：
+- like_winners 5条（点赞破5000的模拟爆款），view_winners 5条（播放破5万的模拟爆款）
+- 标题要贴合实际热门话题，看起来像真实抖音/小红书爆款
+- hook 要有冲击力，能让人停下滑动
+- reason 要点出可复制的运营逻辑"""
+    user = """本周热门话题（来自抖音/小红书/微博/知乎热榜）：
+%s
+
+当前时间：%s
+季节运营背景：%s
+
+请基于以上热门话题，生成租房赛道的爆款视频拆解。""" % (hot_topics_text, week, season)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    return parse_json_from_text(text)
+
+
+def generate_calendar(hot_topics_text, today):
+    """选题日历：下周 7 天选题规划"""
+    week = iso_week_label(today)
+    season = season_context(today)
+    days = next_week_days(today)
+    days_str = "\n".join(["  %d. %s" % (i + 1, d) for i, d in enumerate(days)])
+    system = """你是长租公寓新媒体运营策划专家，负责抖音+小红书双平台内容规划。
+目标人群：上海应届毕业生、青年白领、情侣租客、上海打工人。
+卖点组合参考：A(地铁口+民用水电+押一付一) / B(拎包入住+健身房+社交公区) / C(租金便宜+采光好+可短租)
+
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "week_title": "X月第X周选题规划（副标题）",
+  "plans": [
+    {
+      "day": "周一 X/X",
+      "title": "选题标题（带书名号，有吸引力）",
+      "type": "脚本类型（反差吐槽型/干货攻略型/场景生活型/故事走心型/算账对比型/安全攻略型/改造展示型）",
+      "audience": "目标人群",
+      "bgm": "BGM建议",
+      "time": "发布时间（HH:MM格式）",
+      "summary": "详细内容概括（3-5句话，含借势热点、卖点植入、互动设计、转化路径）"
+    }
+  ]
+}
+
+要求：
+- plans 恰好 7 条，对应周一到周日
+- 每天混搭不同内容类型，避免连续两天同类型
+- 标题要有抖音/小红书爆款感（数字+emoji+冲突/悬念/共鸣）
+- summary 要具体可执行，不是空话
+- 结合当周热门话题借势
+- 发布时间参考：工作日 12:00/18:00-20:00，周末 12:00/19:00-21:00"""
+    user = """本周热门话题（用于借势参考）：
+%s
+
+下周日期：
+%s
+
+当前：%s
+季节背景：%s
+
+请为下周生成完整的7天选题规划。""" % (hot_topics_text, days_str, week, season)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    return parse_json_from_text(text)
+
+
+def generate_competitor(hot_topics_text, today):
+    """竞品监控：4 个竞品本周表现分析"""
+    week = iso_week_label(today)
+    season = season_context(today)
+    comp_list = "\n".join(["  - %s（%s）" % (c["name"], c["desc"]) for c in COMPETITORS])
+    system = """你是长租公寓行业竞争情报分析师。
+你会监控上海本地主要竞品公寓品牌的表现，并给出可操作的运营启示。
+
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "competitors": [
+    {
+      "name": "竞品名称（含emoji前缀）",
+      "posts": "本周发布数（如 5条）",
+      "max_likes": "最高点赞（如 2.3万）",
+      "hot_topic": "本周热门主题",
+      "hot_video": {
+        "title": "最热视频标题",
+        "summary": "视频内容概括（3-4句话）",
+        "data": "数据简析（播放·点赞·完播率·评论）"
+      }
+    }
+  ],
+  "comment_insights": [
+    "1️⃣ 诉求主题 — 描述（如 位置/地铁距离 — 出现频率最高...）"
+  ],
+  "industry_intel": {
+    "tag": "情报来源标签",
+    "title": "情报标题",
+    "content": "情报内容摘要（2-3句话）"
+  },
+  "insights": [
+    "1️⃣ 对我方的启示（一条具体可执行的建议）"
+  ]
+}
+
+要求：
+- competitors 恰好 4 个（自如租房/魔方公寓/V领地/城家公寓）
+- 数据要看起来真实合理（不需要真实爬取，但要有行业可信度）
+- insights 要具体可执行，不能空泛
+- 结合当前季节和热门话题趋势"""
+    user = """监控竞品列表：
+%s
+
+当前：%s
+季节背景：%s
+本周热门话题（用于判断竞品可能借势的方向）：
+%s
+
+请生成本周竞品监控报告。""" % (comp_list, week, season, hot_topics_text)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    return parse_json_from_text(text)
+
+
+def generate_learning(today):
+    """学习计划：月度学习目标和今日打卡目标"""
+    m = today.month
+    season = season_context(today)
+    system = """你是新媒体运营学习规划师，帮助长租公寓运营者制定AI工具学习计划。
+涵盖：文案生成(AI写作)、图像生成(AI绘图)、视频创作(AI剪辑)、数据分析(数据工具)四大领域。
+
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "month": "X月学习计划",
+  "today_goals": [
+    {"id": "g1", "text": "今日目标1（具体可执行的任务描述）", "done": false},
+    {"id": "g2", "text": "今日目标2", "done": false},
+    ...
+  ],
+  "phases": [
+    {
+      "week": "第X-Y周",
+      "title": "阶段主题",
+      "goal": "阶段目标（一句话）",
+      "tools": "涉及工具（用 · 分隔）",
+      "status": "🟡 进行中 或 ⚪ 待开始",
+      "icon": "emoji图标"
+    }
+  ]
+}
+
+要求：
+- today_goals 5条，混合不同领域（文案/图像/视频/数据），具体可执行
+- phases 4个阶段，覆盖一个月的学习路径
+- 工具要是国内可免费/低成本使用的（DeepSeek/豆包/Kimi/即梦AI/剪映/蝉妈妈AI等）
+- status 第一个为 🟡 其余 ⚪"""
+    user = """当前日期：%d年%d月
+季节运营背景：%s
+请生成%d月的学习计划。""" % (today.year, today.m, season, m)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    return parse_json_from_text(text)
+
+
+# ── 主流程 ────────────────────────────────────────────
+
+
 def build():
     today = datetime.date.today()
+    is_monthly_first = today.day == 1  # 月度第一天触发学习计划更新
+
+    # ═══ Step 1: 抓取热榜（基础数据，必须成功）═══
     hotspot = {}
     ok = False
     for key, ptype in PLATFORMS.items():
-        print("抓取平台: %s ..." % key)
+        print("[1/4] 抓取热榜: %s ..." % key)
         res = fetch_platform(ptype)
         if res is not None:
             hotspot[key] = res
@@ -92,10 +403,10 @@ def build():
             hotspot[key] = []
 
     if not ok:
-        print("[skip] 全部平台抓取失败，保留旧数据，跳过本次提交。")
+        print("[skip] 全部热榜平台抓取失败，保留旧数据。")
         return False
 
-    # BGM / 话题名字：取抖音 + 小红书热门标题，去重
+    # ═══ Step 2: 构建 BGM 名字列表 ═══
     names = []
     for k in ("douyin", "rednote"):
         for it in hotspot.get(k, []):
@@ -110,23 +421,87 @@ def build():
             dedup.append(n)
     names = dedup[:BGM_NAME_LIMIT]
 
+    # ═══ Step 3: 构建热梗摘要文本（供 DeepSeek prompt 使用）═══
+    hot_texts = []
+    for k in ("douyin", "rednote"):
+        items = hotspot.get(k, [])[:15]
+        if items:
+            lines = ["[%s Top10]" % k]
+            for it in items[:10]:
+                lines.append("  %d. %s (热度:%s)" % (
+                    it.get("index", "?"), it.get("title", ""), it.get("hot", "")))
+            hot_texts.append("\n".join(lines))
+    hot_topics_text = "\n\n".join(hot_texts) if hot_texts else "(暂无热榜数据)"
+
+    # ═══ Step 4: DeepSeek AI 生成各模块 ═══
+    analysis_data = None
+    calendar_data = None
+    competitor_data = None
+    learning_data = None
+
+    has_key = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
+
+    if has_key:
+        print("[2/4] AI生成: 爆款拆解 ...")
+        analysis_data = generate_analysis(hot_topics_text, today)
+        print("  -> %s" % ("成功" if analysis_data else "跳过"))
+
+        print("[3/4] AI生成: 选题日历 ...")
+        calendar_data = generate_calendar(hot_topics_text, today)
+        print("  -> %s" % ("成功" if calendar_data else "跳过"))
+
+        print("[3/4] AI生成: 竞品监控 ...")
+        competitor_data = generate_competitor(hot_topics_text, today)
+        print("  -> %s" % ("成功" if competitor_data else "跳过"))
+
+        if is_monthly_first:
+            print("[4/4] AI生成: 学习计划（月度更新）...")
+            learning_data = generate_learning(today)
+            print("  -> %s" % ("成功" if learning_data else "跳过"))
+        else:
+            print("[4/4] 学习计划: 非月初，跳过（每月1号更新）")
+    else:
+        print("[skip] DEEPSEEK_API_KEY 未配置，所有 AI 模块跳过")
+
+    # ═══ Step 5: 组装最终 payload ═══
     payload = {
         "week": iso_week_label(today),
         "week_label": week_range_label(today),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": "uapis.cn",
+        "source": "uapis.cn + deepseek",
         "hotspot": hotspot,
         "bgm": {"names": names},
     }
 
+    if analysis_data:
+        payload["analysis"] = analysis_data
+    if calendar_data:
+        payload["calendar"] = calendar_data
+    if competitor_data:
+        payload["competitor"] = competitor_data
+    if learning_data:
+        payload["learning"] = learning_data
+
+    # ═══ Step 6: 写入文件 ═══
     os.makedirs("data", exist_ok=True)
     with open("data/latest.json", "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    total = sum(len(v) for v in hotspot.values())
-    print("[done] 已写入 data/latest.json：%d 条热榜，%d 个BGM/话题名字" % (total, len(names)))
+    total_hot = sum(len(v) for v in hotspot.values())
+    parts = ["%d条热榜" % total_hot, "%d个BGM名字" % len(names)]
+    if analysis_data:
+        parts.append("爆款拆解✅")
+    if calendar_data:
+        parts.append("选题日历✅")
+    if competitor_data:
+        parts.append("竞品监控✅")
+    if learning_data:
+        parts.append("学习计划✅")
+
+    print("[done] data/latest.json 已写入: %s" % " + ".join(parts))
     return True
 
 
 if __name__ == "__main__":
-    build()
+    success = build()
+    sys.exit(0 if success else 1)
