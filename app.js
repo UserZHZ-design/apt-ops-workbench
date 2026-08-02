@@ -671,7 +671,14 @@ async function fetchWeeklyData(forceLive) {
       var res = await fetch(WEEKLY_JSON + '?t=' + Date.now(), { cache:'no-store' });
       if (res.ok) {
         var d = await res.json();
-        if (d && d.hotspot) { weeklyDataCache = d; saveWeeklyLocal(d); return d; }
+        if (d && d.hotspot) {
+          // 仓库周更数据若已过期（进入新的一周），自动改用实时拉取，保证打开即最新
+          if (d.week && d.week !== isoWeekLabel(new Date())) {
+            var ld0 = await fetchWeeklyLive();
+            if (ld0 && ld0.hotspot) { weeklyDataCache = ld0; saveWeeklyLocal(ld0); return ld0; }
+          }
+          weeklyDataCache = d; saveWeeklyLocal(d); return d;
+        }
       }
     } catch(e){}
   }
