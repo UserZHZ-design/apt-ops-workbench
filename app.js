@@ -236,6 +236,92 @@ function sourceLabel(url, label) {
   return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);padding:4px 10px;border-radius:6px;background:var(--bg);white-space:nowrap;">'+icon+' '+label+'</span>';
 }
 
+// ===== DEEPSEEK API HELPER (browser-side; key stored in localStorage only) =====
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function getMonday(d) {
+  var date = new Date(d);
+  var day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - day);
+  date.setHours(0,0,0,0);
+  return date;
+}
+
+function formatWeek(ts) {
+  var d = new Date(ts);
+  return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日';
+}
+
+function parseJSONSafe(text) {
+  if (!text) return null;
+  var t = String(text).trim();
+  var m = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (m) t = m[1].trim();
+  try { return JSON.parse(t); } catch(e) {}
+  var s = t.indexOf('{'); var e = t.lastIndexOf('}');
+  if (s >= 0 && e > s) { try { return JSON.parse(t.substring(s, e+1)); } catch(e2){} }
+  return null;
+}
+
+async function callDeepSeek(prompt, opts) {
+  opts = opts || {};
+  var apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) {
+    showApiKeyModal();
+    throw new Error('请先在上方输入 DeepSeek API Key');
+  }
+  var body = JSON.stringify({
+    model: opts.model || 'deepseek-chat',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: opts.maxTokens || 2000,
+    temperature: (opts.temperature != null ? opts.temperature : 0.7),
+    stream: false
+  });
+  var res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: body
+  });
+  if (!res.ok) {
+    var msg = 'API错误(' + res.status + ')';
+    try { var ej = JSON.parse(await res.text()); if (ej.error && ej.error.message) msg = ej.error.message; } catch(e) {}
+    throw new Error(msg);
+  }
+  var data = await res.json();
+  return data.choices[0].message.content;
+}
+
+function renderApiKeyBar() {
+  var saved = !!localStorage.getItem('deepseek_api_key');
+  var status = saved
+    ? '<span style="color:#16a34a;font-size:12px;">✅ 已连接</span>'
+    : '<span style="color:#dc2626;font-size:12px;">⚠️ 未设置</span>';
+  return '<div id="apiKeyBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;">' +
+    '<span style="font-size:13px;">🔑 DeepSeek API Key</span>' +
+    '<input id="apiKeyInput" type="password" placeholder="粘贴你的 DeepSeek API Key (sk-...)" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);">' +
+    '<button onclick="saveApiKey()" style="padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;">保存</button>' +
+    status +
+    '</div>';
+}
+
+function saveApiKey() {
+  var inp = document.getElementById('apiKeyInput');
+  if (!inp) return;
+  var v = inp.value.trim();
+  if (!v) { showToast('请输入 Key'); return; }
+  localStorage.setItem('deepseek_api_key', v);
+  showToast('✅ API Key 已保存（仅存于本机浏览器）');
+  var bar = document.getElementById('apiKeyBar');
+  if (bar) bar.outerHTML = renderApiKeyBar();
+}
+
+function showApiKeyModal() {
+  showToast('⚠️ 请先在上方输入并保存 DeepSeek API Key');
+}
+
 function scrollToSection(id) {
   var el = document.getElementById(id);
   var container = document.getElementById('contentBody');
@@ -375,7 +461,10 @@ function renderHotspot(container) {
   var counts={hot:0,ref:0,skip:0};
   hotspots.forEach(function(h){ counts[h.cat]++; });
 
-  var html = '<div class="stats-row">' +
+  var html = renderApiKeyBar() +
+    '<div id="hotspotAISection" style="margin-bottom:22px;"></div>' +
+    '<div class="section-title">📚 历史参考热梗（往期·可改编）</div>' +
+    '<div class="stats-row">' +
     '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-hot\')"><div class="stat-value">'+hotspots.length+'</div><div class="stat-label">今日热点话题</div></div>' +
     '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-hot\')"><div class="stat-value">'+counts.hot+'</div><div class="stat-label">🔥 可直接改编</div></div>' +
     '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-ref\')"><div class="stat-value">'+counts.ref+'</div><div class="stat-label">👀 可参考创意</div></div>' +
@@ -429,6 +518,72 @@ function renderHotspot(container) {
     '<p style="font-size:12px;color:var(--text-secondary);">打开上方任一资源链接 → 找到本周适合租房赛道的话题 → 在对应平台发布视频/笔记即可。数据会实时刷新，无需积分消耗。</p>'+
     '</div>';
   container.innerHTML = html;
+  fillHotspotAISection();
+}
+
+function fillHotspotAISection() {
+  var el = document.getElementById('hotspotAISection');
+  if (!el) return;
+  var cache = null;
+  try { var raw = localStorage.getItem('hotspot_ai_cache'); if (raw) cache = JSON.parse(raw); } catch(e){}
+  var curMonday = getMonday(new Date()).getTime();
+  if (cache && cache.weekStart === curMonday && cache.data && cache.data.topics && cache.data.topics.length) {
+    var d = cache.data;
+    var html = '<div style="background:linear-gradient(135deg,#4D6BFE,#7C3AED);border-radius:var(--radius);padding:16px 18px;color:#fff;margin-bottom:14px;">' +
+      '<div style="font-weight:700;font-size:15px;margin-bottom:2px;">🤖 AI 本周热梗</div>' +
+      '<div style="font-size:12px;opacity:.85;">'+(d.week||('本周 '+formatWeek(curMonday)+' 起'))+' · 基于热点生成 · 点击可刷新</div>' +
+      '</div>';
+    html += '<div class="card-grid">';
+    d.topics.forEach(function(h, i){
+      var capHtml = '';
+      if (h.captions && h.captions.length) {
+        capHtml = '<button class="expand-btn" onclick="toggleExpand(\'ai-cap-'+i+'\')">📝 查看文案 ('+h.captions.length+')</button>';
+        capHtml += '<div class="expandable" id="ai-cap-'+i+'">';
+        h.captions.forEach(function(c){
+          var t = (typeof c === 'string') ? c : c.text;
+          var encoded = encodeURIComponent(t).replace(/'/g, '%27').replace(/"/g, '%22');
+          capHtml += '<div class="caption-box"><div class="cap-text">'+escapeHtml(t)+'</div><span class="cap-copy" data-copy="'+encoded+'">📋 复制文案</span></div>';
+        });
+        capHtml += '</div>';
+      }
+      html += '<div class="content-card">'+
+        '<span class="card-tag tag-fire">🔥 AI热梗</span>'+
+        '<h3>'+escapeHtml(h.title)+'</h3>'+
+        '<div class="card-meta"><span>📱 '+escapeHtml(h.platform||'')+'</span>'+(h.exposure?'<span>📊 '+escapeHtml(h.exposure)+'</span>':'')+'</div>'+
+        '<p>💡 '+escapeHtml(h.tip||'')+'</p>'+capHtml+
+      '</div>';
+    });
+    html += '</div>';
+    html += '<div style="margin-top:12px;"><button onclick="generateHotspotsAI()" style="padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 重新生成本周热梗</button></div>';
+    el.innerHTML = html;
+  } else {
+    var isNew = !cache;
+    el.innerHTML = '<div style="padding:16px 18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;">' +
+      '<div style="font-size:15px;font-weight:600;margin-bottom:6px;">📅 本周热梗待更新</div>' +
+      '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">'+(isNew?'首次使用，':'上周内容已过期，')+'点击生成，AI 将基于本周（'+formatWeek(curMonday)+' 起）热点创作 5 条热梗+文案</p>' +
+      '<button onclick="generateHotspotsAI()" style="padding:10px 22px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;">🤖 AI 生成本周热梗</button>' +
+      '</div>';
+  }
+}
+
+async function generateHotspotsAI() {
+  var btn = document.getElementById('aiHotspotBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }
+  showToast('🤖 AI 正在分析本周热梗...');
+  var prompt = '你是上海长租公寓/保障性租赁住房新媒体运营专家。请基于当前时节（2026年8月，换租季）抖音和小红书的热点，为「长租公寓/租房」账号筛选并改写 5 条最值得改编的热门话题。\n\n请严格按以下 JSON 格式返回（只返回 JSON，不要额外文字）：\n{\n  "week": "2026年第X周(8月X日-X日)",\n  "topics": [\n    {"title":"#话题名","platform":"抖音 或 小红书","exposure":"预估热度，如 8000万播放","tip":"改编建议（1-2句，含切入角度）","captions":["文案版本1，不超过60字","文案版本2，不超过60字"]}\n  ]\n}\n\n要求：话题与租房/独居/沪漂/毕业季/换租强相关；文案自然植入公寓卖点（地铁口/民用水电/押一付一/拎包入住/健身房/社交公区），不得硬广；语气轻松有网感。';
+  try {
+    var text = await callDeepSeek(prompt, { maxTokens: 2500, temperature: 0.85 });
+    var parsed = parseJSONSafe(text);
+    if (!parsed || !parsed.topics) throw new Error('AI 返回格式异常，请重试');
+    var weekStart = getMonday(new Date()).getTime();
+    localStorage.setItem('hotspot_ai_cache', JSON.stringify({ weekStart: weekStart, data: parsed, updatedAt: Date.now() }));
+    fillHotspotAISection();
+    showToast('✅ 本周热梗已生成');
+  } catch(e) {
+    showToast('❌ 生成失败：' + e.message);
+    var el = document.getElementById('hotspotAISection');
+    if (el && btn) { btn.disabled = false; btn.textContent = '🤖 AI 生成本周热梗'; }
+  }
 }
 
 // ===== 2. BGM RENDERER =====
@@ -620,7 +775,8 @@ function renderAnalysis(container) {
 
 // ===== 4. SCRIPT RENDERER =====
 function renderScript(container) {
-  var html = '<div class="stats-row">' +
+  var html = renderApiKeyBar() +
+    '<div class="stats-row">' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-input\')"><div class="stat-value">3</div><div class="stat-label">✍️ 风格类型</div></div>' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-presets\')"><div class="stat-value">12</div><div class="stat-label">📋 预设话题</div></div>' +
   '<div class="stat-card" style="cursor:pointer"><div class="stat-value">∞</div><div class="stat-label">🤖 AI生成</div></div>' +
@@ -640,7 +796,7 @@ function renderScript(container) {
     '<div id="promptList" style="margin-bottom:16px;"></div>' +
     '<div class="input-form">' +
       '<input type="text" id="scriptTopic" placeholder="或输入自定义话题，如：毕业生租房、地铁口公寓..." />' +
-      '<button class="btn-primary" onclick="generateScripts()">✍️ 模板生成</button>' +
+      '<button class="btn-primary" id="scriptTopicBtn" onclick="generateScripts()">✍️ AI 生成</button>' +
     '</div>' +
     '<div id="generatedScripts"></div>';
 
@@ -703,51 +859,57 @@ function renderScript(container) {
   container.innerHTML = html;
 }
 
-function generateScripts() {
+async function generateScripts() {
   var topic = document.getElementById('scriptTopic').value.trim();
   if (!topic) { showToast('请输入话题关键词'); return; }
+  var btn = document.getElementById('scriptTopicBtn');
   var container = document.getElementById('generatedScripts');
-  var templates = [
-    {
-      style:'😈 反差吐槽型',
-      title:'「关于'+topic+'，这些坑你一定要知道！」',
-      hook:'"说到'+topic+'，我踩过的坑比你吃过的米还多...第一个就让我亏了2000块"',
-      scenes:[
-        '镜头1(0-3s): 怼脸特写，夸张皱眉 "'+topic+'这5个坑，我替你们踩完了！"',
-        '镜头2(3-12s): 快速切换3个"踩坑"画面，配合翻白眼表情特效',
-        '镜头3(12-22s): 切到公寓实拍，阳光洒进房间 → "但如果你选对了，'+topic+'也可以很香"',
-        '镜头4(22-30s): 结尾大字卡："你的'+topic+'踩过什么坑？评论区见"'
-      ],
-      bgm:'"不是你听我说"魔性人声 → 切轻快卡点音乐', duration:'30秒'
-    },
-    {
-      style:'🏠 场景生活型',
-      title:'「'+topic+'的一天，原来可以这么美好」',
-      hook:'"谁说'+topic+'只能凑合？今天带你看看什么叫住得有品质..."',
-      scenes:[
-        '镜头1(0-3s): 推门背影，阳光洒入 → 温柔BGM渐入 "这是我在上海'+topic+'的第30天"',
-        '镜头2(3-15s): 一镜到底：厨房做早餐→公区健身→阳台吹风',
-        '镜头3(15-25s): 插入社交画面：和邻居聊天、公区活动',
-        '镜头4(25-32s): 坐在窗边独白："原来'+topic+'，也可以很幸福" → 画面渐变黑'
-      ],
-      bgm:'《落日与晚风》- 傅梦彤（治愈系人声）', duration:'32秒'
-    }
-  ];
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">🤖 AI 正在为「'+escapeHtml(topic)+'」生成脚本...</div>';
+  var prompt = '你是上海长租公寓/保障性租赁住房新媒体运营专家。请为话题「'+topic+'」生成 3 条不同风格的抖音/小红书短视频脚本。\n\n每条脚本严格用以下格式（用 ===== 分隔不同的脚本）：\n\n===== 风格名 =====\n标题：XXX\n前3秒钩子：XXX\n分镜：\n1. 镜头1（0-3s）：画面+台词\n2. 镜头2（3-15s）：画面+台词\n3. 镜头3（15-30s）：画面+台词\nBGM及卡点：XXX\n时长预估：XXX秒\n封面建议：XXX\n\n要求：3 条风格分别为「😈反差吐槽型」「🏠场景生活型」「💛故事走心型」；自然植入公寓卖点（地铁口/民用水电/押一付一/拎包入住/健身房/社交公区），真实有网感不打硬广；分镜具体可执行。';
+  try {
+    var text = await callDeepSeek(prompt, { maxTokens: 2500, temperature: 0.85 });
+    container.innerHTML = renderScriptsFromText(topic, text);
+    showToast('✅ 脚本已生成');
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;color:#dc2626;">❌ 生成失败：'+escapeHtml(e.message)+'</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✍️ AI 生成'; }
+  }
+}
 
-  var html = '<div class="section-title" style="color:var(--primary);">✨ AI生成的脚本（话题：'+topic+'）</div>';
-  templates.forEach(function(s) {
-    html += '<div class="script-card"><div class="script-header"><h3>'+s.style+'：'+s.title+'</h3></div>'+
-      '<div class="script-body">'+
-        '<p><strong>🪝 前3秒钩子：</strong>'+s.hook+'</p>'+
-        '<div class="scene-label">📸 分镜描述</div>'+
-        '<p>'+s.scenes.join('<br>')+'</p>'+
-        '<p style="margin-top:10px;"><strong>🎵 BGM及卡点：</strong>'+s.bgm+'</p>'+
-        '<p><strong>⏱️ 时长预估：</strong>'+s.duration+'</p>'+
-        '<p style="margin-top:8px;"><strong>🖼️ 封面建议：</strong>大字标题+博主照+房源亮点</p>'+
-      '</div></div>';
+function renderScriptsFromText(topic, text) {
+  if (!text) return '';
+  var blocks = text.split(/=====/).map(function(b){return b.trim();}).filter(function(b){return b.length>0;});
+  if (blocks.length === 0) {
+    return '<div class="script-card"><div class="script-body"><p style="white-space:pre-wrap;">'+escapeHtml(text)+'</p></div></div>';
+  }
+  var html = '<div class="section-title" style="color:var(--primary);">✨ AI 生成脚本（话题：'+escapeHtml(topic)+'）</div>';
+  blocks.forEach(function(block){
+    var style = 'AI 脚本', title = '', hook = '', scenes = [], bgm = '', duration = '', cover = '';
+    var lines = block.split('\n');
+    var inScenes = false;
+    lines.forEach(function(raw){
+      var line = raw.trim();
+      if (/^风格/.test(line)) { style = line.replace(/^风格[：:]/,'').trim(); inScenes = false; }
+      else if (/^标题/.test(line)) { title = line.replace(/^标题[：:]/,'').trim(); inScenes = true; }
+      else if (/^前3秒钩子/.test(line)) { hook = line.replace(/^前3秒钩子[：:]/,'').trim(); inScenes = false; }
+      else if (/^BGM/.test(line)) { bgm = line.replace(/^BGM及卡点[：:]/,'').trim(); inScenes = false; }
+      else if (/^时长预估/.test(line)) { duration = line.replace(/^时长预估[：:]/,'').trim(); inScenes = false; }
+      else if (/^封面建议/.test(line)) { cover = line.replace(/^封面建议[：:]/,'').trim(); inScenes = false; }
+      else if (/^分镜/.test(line)) { inScenes = true; }
+      else if (/^\d+[.、]/.test(line)) { if (inScenes) scenes.push(line.trim()); }
+      else if (line && inScenes) { scenes.push(line); }
+    });
+    html += '<div class="script-card"><div class="script-header"><h3>'+escapeHtml(style)+'：'+escapeHtml(title)+'</h3></div><div class="script-body">';
+    if (hook) html += '<p><strong>🪝 前3秒钩子：</strong>'+escapeHtml(hook)+'</p>';
+    if (scenes.length) { html += '<div class="scene-label">📸 分镜描述</div><p>'+escapeHtml(scenes.join('\n')).replace(/\n/g,'<br>')+'</p>'; }
+    if (bgm) html += '<p style="margin-top:10px;"><strong>🎵 BGM及卡点：</strong>'+escapeHtml(bgm)+'</p>';
+    if (duration) html += '<p><strong>⏱️ 时长预估：</strong>'+escapeHtml(duration)+'</p>';
+    if (cover) html += '<p style="margin-top:8px;"><strong>🖼️ 封面建议：</strong>'+escapeHtml(cover)+'</p>';
+    html += '</div></div>';
   });
-  container.innerHTML = html;
-  renderPromptList();
+  return html;
 }
 
 function renderPromptList() {
