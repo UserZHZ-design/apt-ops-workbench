@@ -463,6 +463,7 @@ function renderHotspot(container) {
 
   var html = renderApiKeyBar() +
     '<div id="hotspotAISection" style="margin-bottom:22px;"></div>' +
+    '<div id="hotspotLiveSection" style="margin-bottom:22px;"></div>' +
     '<div class="section-title">📚 历史参考热梗（往期·可改编）</div>' +
     '<div class="stats-row">' +
     '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-hot\')"><div class="stat-value">'+hotspots.length+'</div><div class="stat-label">今日热点话题</div></div>' +
@@ -519,6 +520,7 @@ function renderHotspot(container) {
     '</div>';
   container.innerHTML = html;
   fillHotspotAISection();
+  fillHotspotLiveSection();
 }
 
 function fillHotspotAISection() {
@@ -586,6 +588,198 @@ async function generateHotspotsAI() {
   }
 }
 
+// ===== 周更数据层（免费 API：uapis.cn）=====
+// 数据来源：GitHub Action 每周一9点抓取提交到 data/latest.json（同域读取，无跨域）
+// 兜底：浏览器直连 uapis.cn 实时拉取（已验证 CORS 可用），再兜底本地缓存
+var weeklyDataCache = null;
+var hotspotLiveTab = 'douyin';
+var WEEKLY_JSON = './data/latest.json';
+
+function isoWeekLabel(d) {
+  var dt = new Date(d);
+  var mon = getMonday(dt);
+  var first = new Date(mon.getFullYear(), 0, 1);
+  var wk = Math.round((mon - first) / (7 * 86400000)) + 1;
+  return mon.getFullYear() + '年第' + wk + '周';
+}
+function weekRangeLabel(d) {
+  var mon = getMonday(new Date(d));
+  var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return mon.getFullYear() + '年' + (mon.getMonth()+1) + '月' + mon.getDate() + '日 ~ ' + sun.getFullYear() + '年' + (sun.getMonth()+1) + '月' + sun.getDate() + '日';
+}
+function formatHot(v) {
+  if (v == null) return '';
+  var s = String(v);
+  if (/w$/i.test(s)) return s.replace(/w/i, '万');
+  var n = Number(s);
+  if (!isNaN(n)) {
+    if (n >= 100000000) return (n/100000000).toFixed(1) + '亿';
+    if (n >= 10000) return (n/10000).toFixed(1) + '万';
+    return s;
+  }
+  return s;
+}
+function saveWeeklyLocal(d) { try { localStorage.setItem('apt_v4_weekly', JSON.stringify({ ts: Date.now(), data: d })); } catch(e){} }
+function loadWeeklyLocal() { try { var raw = localStorage.getItem('apt_v4_weekly'); if (raw) { var o = JSON.parse(raw); if (o && o.data) return o.data; } } catch(e){} return null; }
+
+async function fetchWeeklyLive() {
+  var plats = [
+    { k:'douyin', api:'douyin' }, { k:'rednote', api:'rednote' },
+    { k:'weibo', api:'weibo' }, { k:'zhihu', api:'zhihu' }
+  ];
+  var results = {};
+  await Promise.all(plats.map(function(p) {
+    return fetch('https://uapis.cn/api/v1/mic/hotboard?type=' + p.api, { cache:'no-store' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        if (j && j.list) {
+          results[p.k] = j.list.slice(0, 30).map(function(it) {
+            var extra = it.extra || {};
+            return {
+              index: it.index,
+              title: (it.title || '').trim(),
+              url: it.url || '',
+              hot: it.hot_value || '',
+              cover: it.cover || extra.cover || ''
+            };
+          });
+        }
+      }).catch(function(){});
+  }));
+  var names = [];
+  ['douyin','rednote'].forEach(function(k) {
+    (results[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
+  });
+  var seen = {}; var dedup = [];
+  names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
+  names = dedup.slice(0, 40);
+  var d = new Date();
+  return {
+    week: isoWeekLabel(d),
+    week_label: weekRangeLabel(d),
+    generated_at: d.toISOString(),
+    live: true,
+    source: 'uapis.cn',
+    hotspot: results,
+    bgm: { names: names }
+  };
+}
+
+async function fetchWeeklyData(forceLive) {
+  if (!forceLive) {
+    try {
+      var res = await fetch(WEEKLY_JSON + '?t=' + Date.now(), { cache:'no-store' });
+      if (res.ok) {
+        var d = await res.json();
+        if (d && d.hotspot) { weeklyDataCache = d; saveWeeklyLocal(d); return d; }
+      }
+    } catch(e){}
+  }
+  try {
+    var ld = await fetchWeeklyLive();
+    if (ld && ld.hotspot) { weeklyDataCache = ld; saveWeeklyLocal(ld); return ld; }
+  } catch(e){}
+  var local = loadWeeklyLocal();
+  if (local) { weeklyDataCache = local; return local; }
+  return null;
+}
+
+async function fillHotspotLiveSection() {
+  var el = document.getElementById('hotspotLiveSection');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">📡 正在加载实时热榜...</div>';
+  var data = await fetchWeeklyData(false);
+  if (!data || !data.hotspot) {
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂时无法加载实时热榜，请检查网络或稍后重试。</div>';
+    return;
+  }
+  renderHotspotLive(data);
+}
+
+function renderHotspotLive(data) {
+  var el = document.getElementById('hotspotLiveSection');
+  if (!el) return;
+  var platforms = [ {k:'douyin',n:'抖音'},{k:'rednote',n:'小红书'},{k:'weibo',n:'微博'},{k:'zhihu',n:'知乎'} ];
+  var tabs = platforms.map(function(p) {
+    var active = (p.k === hotspotLiveTab);
+    var cnt = (data.hotspot[p.k] || []).length;
+    return '<span onclick="setHotspotTab(\'' + p.k + '\')" style="cursor:pointer;padding:6px 14px;border-radius:20px;font-size:13px;' + (active ? 'background:var(--primary);color:#fff;' : 'background:var(--bg);color:var(--text);border:1px solid var(--border);') + '">' + p.n + ' (' + cnt + ')</span>';
+  }).join(' ');
+  var list = (data.hotspot[hotspotLiveTab] || []).slice(0, 25);
+  var items = list.map(function(it) {
+    var rank = it.index || '';
+    var rankColor = (Number(rank) <= 3 && rank !== '') ? '#ff4d4f' : 'var(--text-muted)';
+    return '<a href="' + encodeURI(it.url || '#') + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);text-decoration:none;color:var(--text);">' +
+      '<span style="min-width:22px;text-align:center;font-weight:700;color:' + rankColor + ';">' + rank + '</span>' +
+      (it.cover ? '<img src="' + encodeURI(it.cover) + '" style="width:40px;height:40px;border-radius:8px;object-fit:cover;" onerror="this.style.display=\'none\'">' : '') +
+      '<span style="flex:1;font-size:14px;line-height:1.4;">' + escapeHtml(it.title || '') + '</span>' +
+      (it.hot ? ' <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">' + escapeHtml(formatHot(it.hot)) + '</span>' : '') +
+    '</a>';
+  }).join('');
+  var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
+  el.innerHTML =
+    '<div style="background:linear-gradient(135deg,#0ea5e9,#4D6BFE);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<div><div style="font-weight:700;font-size:15px;">📡 实时热榜 · 免费API自动更新</div>' +
+        '<div style="font-size:12px;opacity:.85;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + escapeHtml(data.week_label || '') + ' · ' + liveTag + '</div></div>' +
+        '<button onclick="refreshWeekly(\'hotspot\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' + tabs + '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">' + (items || '<div style="padding:16px;color:var(--text-muted);font-size:13px;">该平台暂无数据</div>') + '</div>' +
+    '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">数据来源 uapis.cn 免费接口 · GitHub Action 每周一9点自动刷新，也可点「立即刷新」实时拉取（需联网）</p>';
+}
+
+function setHotspotTab(k) {
+  hotspotLiveTab = k;
+  var d = weeklyDataCache;
+  if (d) renderHotspotLive(d);
+}
+
+async function fillBgmLiveSection() {
+  var el = document.getElementById('bgmLiveSection');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">🔥 正在加载本周热门BGM/话题...</div>';
+  var data = await fetchWeeklyData(false);
+  if (!data || !data.bgm || !data.bgm.names || !data.bgm.names.length) {
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请检查网络或稍后重试。</div>';
+    return;
+  }
+  renderBgmLive(data);
+}
+
+function renderBgmLive(data) {
+  var el = document.getElementById('bgmLiveSection');
+  if (!el) return;
+  var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
+  var chips = data.bgm.names.slice(0, 40).map(function(nm) {
+    return '<a href="https://www.douyin.com/search/' + encodeURIComponent(nm) + '" target="_blank" rel="noopener" style="display:inline-block;padding:8px 14px;margin:5px 5px 0 0;background:var(--card);border:1px solid var(--border);border-radius:20px;font-size:13px;color:var(--text);text-decoration:none;">🔍 ' + escapeHtml(nm) + '</a>';
+  }).join('');
+  el.innerHTML =
+    '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<div><div style="font-weight:700;font-size:15px;">🔥 本周热门BGM/话题（去抖音搜）</div>' +
+        '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + ' · 点击名字直达抖音搜索</div></div>' +
+        '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' + chips + '</div>' +
+    '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">名单取自本周抖音/小红书热门话题，抓取「名字」供你到抖音平台搜索对应BGM/话题，数据来源 uapis.cn</p>';
+}
+
+async function refreshWeekly(which) {
+  showToast('📡 正在实时拉取最新热榜...');
+  try {
+    var data = await fetchWeeklyData(true);
+    if (!data) throw new Error('无数据');
+    if (which === 'hotspot') renderHotspotLive(data);
+    else if (which === 'bgm') renderBgmLive(data);
+    showToast('✅ 已刷新为最新数据');
+  } catch(e) {
+    showToast('❌ 刷新失败：' + (e && e.message ? e.message : '网络异常'));
+  }
+}
+
 // ===== 2. BGM RENDERER =====
 function renderBGM(container) {
   var topPlays = [
@@ -638,7 +832,8 @@ function renderBGM(container) {
   ];
 
   var allBGMs = topPlays.length + topUses.length + sfx.length;
-  var html = '<div class="stats-row">' +
+  var html = '<div id="bgmLiveSection" style="margin-bottom:22px;"></div>' +
+    '<div class="stats-row">' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-plays\')"><div class="stat-value">'+topPlays.length+'</div><div class="stat-label">🎵 播放量TOP</div></div>' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-uses\')"><div class="stat-value">'+topUses.length+'</div><div class="stat-label">📈 使用量TOP</div></div>' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-sfx\')"><div class="stat-value">'+sfx.length+'</div><div class="stat-label">🔊 热门音效</div></div>' +
@@ -690,6 +885,7 @@ function renderBGM(container) {
     '<p style="font-size:12px;color:var(--text-secondary);">打开上方音乐平台 → 查看排行榜 → 选择适合视频风格的BGM → 在剪辑时使用。本模块展示的是示例推荐，可手动替换。</p>'+
     '</div>';
   container.innerHTML = html;
+  fillBgmLiveSection();
 }
 
 // ===== 3. ANALYSIS RENDERER =====
@@ -880,16 +1076,32 @@ async function generateScripts() {
 
 function renderScriptsFromText(topic, text) {
   if (!text) return '';
-  var blocks = text.split(/=====/).map(function(b){return b.trim();}).filter(function(b){return b.length>0;});
+  // 去除所有 '=====' 分隔符（AI 可能写成 ===== 风格名 ===== 带闭合），再按"风格"行切分脚本块
+  var clean = text.replace(/=+/g, '').trim();
+  var lines = clean.split('\n');
+  var rawBlocks = [];
+  var cur = [];
+  lines.forEach(function(l) {
+    var t = l.trim();
+    if (/^风格/.test(t) && cur.length) {
+      rawBlocks.push(cur.join('\n'));
+      cur = [l];
+    } else {
+      cur.push(l);
+    }
+  });
+  if (cur.length) rawBlocks.push(cur.join('\n'));
+  // 仅保留包含"风格/标题"的块，过滤开头序言
+  var blocks = rawBlocks.filter(function(b){ return /风格|标题/.test(b); });
   if (blocks.length === 0) {
     return '<div class="script-card"><div class="script-body"><p style="white-space:pre-wrap;">'+escapeHtml(text)+'</p></div></div>';
   }
   var html = '<div class="section-title" style="color:var(--primary);">✨ AI 生成脚本（话题：'+escapeHtml(topic)+'）</div>';
   blocks.forEach(function(block){
     var style = 'AI 脚本', title = '', hook = '', scenes = [], bgm = '', duration = '', cover = '';
-    var lines = block.split('\n');
+    var blines = block.split('\n');
     var inScenes = false;
-    lines.forEach(function(raw){
+    blines.forEach(function(raw){
       var line = raw.trim();
       if (/^风格/.test(line)) { style = line.replace(/^风格[：:]/,'').trim(); inScenes = false; }
       else if (/^标题/.test(line)) { title = line.replace(/^标题[：:]/,'').trim(); inScenes = true; }
