@@ -287,7 +287,15 @@ async function callDeepSeek(prompt, opts) {
   });
   if (!res.ok) {
     var msg = 'API错误(' + res.status + ')';
-    try { var ej = JSON.parse(await res.text()); if (ej.error && ej.error.message) msg = ej.error.message; } catch(e) {}
+    var em = '';
+    try {
+      var ej = JSON.parse(await res.text());
+      em = ej.error && ej.error.message ? ej.error.message : (ej.message || '');
+    } catch(e) {}
+    if (res.status === 402) msg = '💰 DeepSeek 余额不足，请充值后重试（设置 → API Key 处可重新粘贴）';
+    else if (res.status === 401) msg = '🔑 DeepSeek API Key 无效，请检查 Key 是否正确（可在上方重新保存）';
+    else if (res.status === 429) msg = '⏳ DeepSeek 请求过于频繁，请稍后再试';
+    else if (em) msg = em;
     throw new Error(msg);
   }
   var data = await res.json();
@@ -701,6 +709,7 @@ async function fillHotspotLiveSection() {
     return;
   }
   renderHotspotLive(data);
+  renderDeepseekStatusBanner(data);
 }
 
 function renderHotspotLive(data) {
@@ -753,6 +762,7 @@ async function fillBgmLiveSection() {
     return;
   }
   renderBgmLive(data);
+  renderDeepseekStatusBanner(data);
 }
 
 function renderBgmLive(data) {
@@ -792,10 +802,48 @@ async function refreshWeekly(which) {
     if (!data) throw new Error('无数据');
     if (which === 'hotspot') renderHotspotLive(data);
     else if (which === 'bgm') renderBgmLive(data);
+    renderDeepseekStatusBanner(data);
     showToast('✅ 已刷新为最新数据');
   } catch(e) {
     showToast('❌ 刷新失败：' + (e && e.message ? e.message : '网络异常'));
   }
+}
+
+// ── DeepSeek 余额/Key 状态全局横幅 ──
+// 读取周更数据中的 deepseek_status，若 AI 生成失败（余额不足/Key无效等）则顶部弹横幅提示用户
+function renderDeepseekStatusBanner(data) {
+  var el = document.getElementById('deepseekBanner');
+  if (!el) return;
+  data = data || weeklyDataCache;
+  var st = data && data.deepseek_status;
+  if (!st || st.ok === true) { el.classList.remove('show'); el.innerHTML = ''; return; }
+  // 已对该次数据关闭提示则不再显示（按 generated_at 记忆）
+  var dismissedFor = '';
+  try { dismissedFor = localStorage.getItem('dsBannerDismissedFor') || ''; } catch(e) {}
+  if (dismissedFor && dismissedFor === (data.generated_at || '')) { el.classList.remove('show'); el.innerHTML = ''; return; }
+
+  var title = '⚠️ DeepSeek 调用异常';
+  if (st.reason === 'insufficient_balance') title = '💰 DeepSeek 余额不足';
+  else if (st.reason === 'auth_fail') title = '🔑 DeepSeek Key 无效';
+  else if (st.reason === 'rate_limit') title = '⏳ DeepSeek 触发限频';
+  else if (st.reason === 'no_key') title = '🔑 未配置 DeepSeek Key';
+  var msg = st.message || 'AI 模块（爆款拆解/选题日历/竞品监控/学习计划）本次未能更新。';
+
+  el.innerHTML =
+    '<span style="font-size:18px;line-height:1;flex-shrink:0;">⚠️</span>' +
+    '<div class="ds-msg">' +
+      '<div class="ds-title">' + escapeHtml(title) + '</div>' +
+      '<div>' + escapeHtml(msg) + '</div>' +
+    '</div>' +
+    '<button class="ds-close" onclick="dismissDsBanner()">知道了</button>';
+  el.classList.add('show');
+}
+
+function dismissDsBanner() {
+  var d = weeklyDataCache || {};
+  try { localStorage.setItem('dsBannerDismissedFor', d.generated_at || ''); } catch(e) {}
+  var el = document.getElementById('deepseekBanner');
+  if (el) { el.classList.remove('show'); el.innerHTML = ''; }
 }
 
 // ===== 2. BGM RENDERER =====
