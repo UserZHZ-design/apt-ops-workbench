@@ -1,9 +1,11 @@
-name: 每周热榜+BGM自动刷新
+name: 每周热榜+BGM+AI内容自动刷新
 
 on:
   schedule:
-    # 周一 01:00 UTC = 北京时间 09:00（GitHub Actions 使用 UTC）
+    # 周一 01:00 UTC = 北京时间 09:00（周更：热榜/BGM/爆款拆解/选题日历/竞品监控）
     - cron: '0 1 * * 1'
+    # 每月1号 01:00 UTC = 北京时间 09:00（月更：学习计划）
+    - cron: '0 1 1 * *'
   # 允许手动触发测试
   workflow_dispatch: {}
 
@@ -11,10 +13,13 @@ on:
 permissions:
   contents: write
 
+env:
+  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -26,7 +31,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 抓取热榜+BGM 并生成数据
+      - name: 抓取数据 + AI生成内容
         run: python .github/scripts/build_data.py
 
       - name: 提交并推送 data/latest.json
@@ -39,7 +44,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "无变化，跳过提交"
           else
-            git commit -m "chore: 每周热榜+BGM数据刷新 $(date +%F)"
+            git commit -m "chore: 每周/月度数据自动刷新 $(date +%F)"
             git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
             echo "已推送更新"
           fi
