@@ -248,6 +248,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#1f2937;color:#fff;padding:10px 24px;border-radius:24px;font-size:13px;font-weight:500;z-index:1000;transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);pointer-events:none;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 
+/* ===== DEEPSEEK STATUS BANNER (余额不足/Key无效提示) ===== */
+.ds-banner{display:none;align-items:flex-start;gap:10px;padding:12px 24px;background:linear-gradient(135deg,#fef2f2,#fee2e2);border-bottom:1px solid #fecaca;color:#991b1b;font-size:13px;line-height:1.5;flex-shrink:0;}
+.ds-banner.show{display:flex;}
+.ds-banner .ds-msg{flex:1;min-width:0;}
+.ds-banner .ds-title{font-weight:700;margin-bottom:2px;}
+.ds-banner .ds-close{flex-shrink:0;border:1px solid #fca5a5;background:#fff;color:#991b1b;border-radius:20px;padding:4px 12px;font-size:12px;cursor:pointer;white-space:nowrap;transition:all var(--transition);}
+.ds-banner .ds-close:hover{background:#fee2e2;}
+
 /* ===== PWA Install Banner ===== */
 .install-banner{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#1f2937,#374151);color:#fff;padding:12px 16px;z-index:999;display:flex;align-items:center;gap:12px;transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 -4px 20px rgba(0,0,0,0.15);}
 .install-banner.show{transform:translateY(0);}
@@ -318,6 +326,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
   .content-header .module-title{font-size:15px;}
   .content-header .module-subtitle{display:none;}
   .content-body{padding:12px;}
+  .ds-banner{padding:10px 12px;font-size:12px;}
   .card-grid{grid-template-columns:1fr;gap:10px;}
   .stats-row{gap:6px;}
   .stat-card{min-width:70px;padding:8px 10px;}
@@ -387,6 +396,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
       <button class="btn-refresh" id="btnRefresh" onclick="refreshModule()"><span>🔄</span> 刷新数据</button>
     </div>
   </div>
+  <div class="ds-banner" id="deepseekBanner"></div>
   <div class="content-body" id="contentBody">
     <div class="empty-state"><div class="empty-icon">👈</div><div class="empty-text">点击左侧模块开始</div></div>
   </div>
