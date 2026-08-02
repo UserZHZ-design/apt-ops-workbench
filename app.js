@@ -626,11 +626,21 @@ function renderScript(container) {
   '<div class="stat-card" style="cursor:pointer"><div class="stat-value">∞</div><div class="stat-label">🤖 AI生成</div></div>' +
   '<div class="stat-card" style="cursor:pointer"><div class="stat-value">0</div><div class="stat-label">📁 本周生成</div></div>' +
   '</div>';
-  html += '<div class="section-title" id="script-input">🤖 AI智能脚本生成</div>' +
-    '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">输入话题关键词（如"毕业生租房""地铁口公寓""情侣同居"），AI将智能生成1-2条脚本</p>' +
+  html += '<div class="section-title" id="script-input">🤖 AI工具箱（免费 · 一键生成）</div>' +
+    '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">选择AI工具 → 复制提示词 → 粘贴生成 → 复制回工作台</p>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;">' +
+      '<a href="https://chat.deepseek.com" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:14px 8px;background:var(--card);border-radius:var(--radius);text-decoration:none;color:var(--text);border:2px solid #4D6BFE33;">' +
+        '<div style="font-size:28px;margin-bottom:6px;">🐙</div><div style="font-weight:600;font-size:14px;">DeepSeek</div><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">中文最强·免费</div></a>' +
+      '<a href="https://www.doubao.com/chat/" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:14px 8px;background:var(--card);border-radius:var(--radius);text-decoration:none;color:var(--text);border:2px solid #4D6BFE33;">' +
+        '<div style="font-size:28px;margin-bottom:6px;">🫘</div><div style="font-weight:600;font-size:14px;">豆包</div><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">字节出品·免费</div></a>' +
+      '<a href="https://kimi.moonshot.cn" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:14px 8px;background:var(--card);border-radius:var(--radius);text-decoration:none;color:var(--text);border:2px solid #4D6BFE33;">' +
+        '<div style="font-size:28px;margin-bottom:6px;">🌙</div><div style="font-weight:600;font-size:14px;">Kimi</div><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">长文分析·免费</div></a>' +
+    '</div>' +
+    '<div class="section-title" style="font-size:15px;">📋 一键复制提示词</div>' +
+    '<div id="promptList" style="margin-bottom:16px;"></div>' +
     '<div class="input-form">' +
-      '<input type="text" id="scriptTopic" placeholder="输入话题关键词，如：毕业生租房、地铁口公寓、情侣同居..." />' +
-      '<button class="btn-primary" onclick="generateScripts()">✍️ 生成脚本</button>' +
+      '<input type="text" id="scriptTopic" placeholder="或输入自定义话题，如：毕业生租房、地铁口公寓..." />' +
+      '<button class="btn-primary" onclick="generateScripts()">✍️ 模板生成</button>' +
     '</div>' +
     '<div id="generatedScripts"></div>';
 
@@ -737,7 +747,49 @@ function generateScripts() {
       '</div></div>';
   });
   container.innerHTML = html;
-  showToast('✅ 已生成2条脚本');
+  renderPromptList();
+}
+
+function renderPromptList() {
+  var prompts = [
+    { icon:'🎬', title:'抖音短视频脚本', text:'你是上海长租公寓新媒体运营专家。请为抖音平台写一条15-30秒短视频脚本，主题是「[在此输入你的话题，如：应届毕业生租房避坑]」。要求：1.前3秒有强钩子 2.分镜描述清晰（镜头/画面/台词/BGM卡点）3.结尾引导互动 4.风格轻松幽默 5.自然植入公寓卖点（地铁口/民用水电/押一付一等）' },
+    { icon:'📕', title:'小红书种草笔记', text:'你是小红书爆款笔记写手。请写一篇关于「[在此输入话题，如：上海租房好物推荐]」的小红书笔记。要求：1.标题含emoji和数字 2.正文分段清晰 3.口语化有温度 4.植入租房相关卖点 5.结尾引导评论收藏 6.带5个相关话题标签' },
+    { icon:'🔥', title:'热梗文案改写', text:'你是抖音热梗文案专家。请把以下热梗改写成适合长租公寓推广的文案，保持梗的趣味性但自然植入租房卖点。热梗：「[在此输入当前热梗]」。要求：3条不同风格版本，每条不超过50字，适合做视频文案或评论区互动。' },
+    { icon:'🔍', title:'爆款视频拆解', text:'你是短视频运营分析师。请拆解以下视频的爆款逻辑：[在此粘贴视频链接或描述]。从以下维度分析：1.选题角度 2.前3秒钩子 3.内容结构 4.BGM选择 5.互动设计 6.可复用的3个要点 7.适合我们公寓账号借鉴的点' },
+    { icon:'📅', title:'一周选题策划', text:'你是长租公寓新媒体运营策划。请为下周策划7天短视频选题，平台是抖音+小红书。目标人群：上海应届毕业生/青年白领/情侣租客。要求：1.每天1个选题+1句话概括 2.结合当下热点/季节（8月换租季）3.混搭不同内容类型（干货/搞笑/走心/探房/互动）4.每个选题标注预期爆款概率' },
+    { icon:'💬', title:'评论区互动话术', text:'你是抖音评论区运营专家。请为长租公寓账号写15条评论区互动话术，包括：1.回复咨询租房的(5条) 2.回复说贵的(3条) 3.回复问位置的(3条) 4.主动引导私信的(2条) 5.幽默互动的(2条)。要求：自然不生硬，有人情味。' }
+  ];
+  var html = '';
+  prompts.forEach(function(p, i) {
+    html += '<div style="background:var(--card);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;">' +
+      '<div style="font-size:22px;flex-shrink:0;">'+p.icon+'</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:4px;">'+p.title+'</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">'+p.text.substring(0,80)+'...</div>' +
+      '</div>' +
+      '<button onclick="copyPrompt(\''+i+'\')" style="flex-shrink:0;padding:6px 12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;">复制</button>' +
+    '</div>';
+  });
+  html += '<input type="hidden" id="promptData" value=\''+JSON.stringify(prompts).replace(/'/g,"&#39;")+'\'>';
+  document.getElementById('promptList').innerHTML = html;
+}
+
+function copyPrompt(idx) {
+  var data = JSON.parse(document.getElementById('promptData').value);
+  var text = data[idx].text;
+  var textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showToast('✅ 提示词已复制，去AI工具粘贴即可');
+  } catch(e) {
+    showToast('复制失败，请手动复制');
+  }
+  document.body.removeChild(textarea);
 }
 
 // ===== 5. DATA DASHBOARD =====
