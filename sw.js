@@ -1,5 +1,5 @@
 // Service Worker for 长租公寓运营工作台 PWA
-const CACHE_NAME = 'apt-ops-v42';
+const CACHE_NAME = 'apt-ops-v43';
 const OFFLINE_URL = '/index.html';
 
 const PRE_CACHE = [
@@ -62,6 +62,18 @@ self.addEventListener('fetch', (event) => {
             return cached || caches.match(OFFLINE_URL);
           });
         })
+    );
+    return;
+  }
+
+  // 周更数据 / 外部热榜接口：只走网络、不缓存，避免定时更新被 Service Worker 缓存成旧数据
+  const reqUrl = event.request.url;
+  if (reqUrl.includes('/data/') || reqUrl.includes('uapis.cn')) {
+    event.respondWith(
+      fetch(event.request).catch(() => new Response(
+        JSON.stringify({ error: 'offline', timestamp: Date.now() }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      ))
     );
     return;
   }
