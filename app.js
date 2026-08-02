@@ -757,6 +757,17 @@ async function fillBgmLiveSection() {
 
 function renderBgmLive(data) {
   var el = document.getElementById('bgmLiveSection');
+// ── 自动数据读取器：供各模块读取 AI 生成的周更/月更数据 ──
+function getAutoData(key) {
+  if (weeklyDataCache && weeklyDataCache[key]) return weeklyDataCache[key];
+  return null;
+}
+
+function autoUpdateTag(label) {
+  if (!weeklyDataCache || !weeklyDataCache.generated_at) return '';
+  var t = weeklyDataCache.generated_at;
+  return '<span style="display:inline-block;font-size:10px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">🤖 AI更新: ' + t.slice(0,16).replace('T',' ') + '</span>';
+}
   if (!el) return;
   var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
   var chips = data.bgm.names.slice(0, 40).map(function(nm) {
@@ -897,6 +908,58 @@ function renderBGM(container) {
 
 // ===== 3. ANALYSIS RENDERER =====
 function renderAnalysis(container) {
+  // 尝试读取 AI 自动生成的爆款拆解数据
+  var ad = getAutoData('analysis');
+  if (ad) {
+    var lw = (ad.like_winners || []);
+    var vw = (ad.view_winners || []);
+    var sm = (ad.summary || {});
+    var html = '<div class="stats-row">' +
+    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'analysis-likes\')"><div class="value">'+lw.length+'</div><div class="label">👍 高赞视频</div></div>' +
+    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'analysis-views\')"><div class="value">'+vw.length+'</div><div class="label">▶️ 高播放视频</div></div>' +
+    '<div class="stat-card"><div class="value">'+(lw.length+vw.length)+'</div><div class="label">📊 本周拆解</div></div>' +
+    '</div>';
+    html += '<div class="section-title" id="analysis-likes">🏆 点赞破5000 · 爆款拆解（AI生成）' + autoUpdateTag('analysis') + '</div><div class="card-grid">';
+    lw.forEach(function(a) {
+      html += '<div class="content-card">'+
+        '<span class="card-tag tag-fire">❤️ '+(a.likes||'')+'赞</span>'+
+        '<h3>'+(a.title||'')+'</h3>'+
+        '<div class="card-meta"><span>▶️ '+(a.plays||'')+'</span></div>'+
+        '<p><strong>🪝 前3秒钩子：</strong>'+(a.hook||'')+'</p>'+
+        '<p><strong>📐 内容结构：</strong>'+(a.structure||'')+'</p>'+
+        '<p><strong>🔑 爆款原因：</strong>'+(a.reason||'')+'</p>'+
+        '<p><strong>🎵 BGM：</strong>'+(a.bgm||'')+'</p>'+
+        '</div>';
+    });
+    html += '</div>';
+    html += '<div class="section-title" id="analysis-views">📈 播放破5万 · 爆款拆解（AI生成）</div><div class="card-grid">';
+    vw.forEach(function(a) {
+      html += '<div class="content-card">'+
+        '<span class="card-tag tag-hot">▶️ '+(a.plays||'')+'</span>'+
+        '<h3>'+(a.title||'')+'</h3>'+
+        '<div class="card-meta"><span>❤️ '+(a.likes||'')+'赞</span></div>'+
+        '<p><strong>🪝 前3秒钩子：</strong>'+(a.hook||'')+'</p>'+
+        '<p><strong>📐 内容结构：</strong>'+(a.structure||'')+'</p>'+
+        '<p><strong>🔑 爆款原因：</strong>'+(a.reason||'')+'</p>'+
+        '<p><strong>🎵 BGM：</strong>'+(a.bgm||'')+'</p>'+
+        '</div>';
+    });
+    html += '</div>';
+    if (sm.type_dist || sm.duration || sm.bgm_preference) {
+      html += '<div class="section-title">🧬 本周爆款共性归纳（AI分析）</div>' +
+        '<div class="content-card">' +
+        (sm.type_dist ? '<p><strong>类型分布：</strong>'+sm.type_dist+'</p>' : '') +
+        (sm.duration ? '<p><strong>视频时长：</strong>'+sm.duration+'</p>' : '') +
+        (sm.bgm_preference ? '<p><strong>BGM偏好：</strong>'+sm.bgm_preference+'</p>' : '') +
+        (sm.cover_style ? '<p><strong>封面风格：</strong>'+sm.cover_style+'</p>' : '') +
+        (sm.publish_time ? '<p><strong>发布时间：</strong>'+sm.publish_time+'</p>' : '') +
+        '</div>';
+    }
+    container.innerHTML = html;
+    return;
+  }
+
+  // 回退：静态硬编码数据
   var likeWinners = [
     {title:'「月薪8K在上海能租到什么房子？」', likes:'8,234', plays:'12.5万播放', hook:'"在上海，月薪8000真的能住得很好吗？"', structure:'街头采访薪资→带看高性价比公寓→对比同地段价格→开放式讨论', reason:'真实薪资+真实房源=信任感强，价格锚定效应引发共鸣', bgm:'《在你的身边》- 盛哲',
       sources:[{url:'https://www.douyin.com/video/739200000001',label:'抖音视频'},{url:'https://www.xiaohongshu.com/explore/739200000002',label:'小红书笔记'}] },
@@ -1603,6 +1666,58 @@ function formatDate(d) {
 
 // ===== 6. LEARNING PLAN =====
 function renderLearning(container) {
+  // 尝试读取 AI 自动生成的学习计划数据
+  var ld = getAutoData('learning');
+  if (ld && ld.today_goals && ld.today_goals.length) {
+    var todayGoals = ld.today_goals;
+    var phases = (ld.phases || []);
+    var completed = todayGoals.filter(function(g){return g.done}).length;
+    var totalTools = 0;
+    if (phases.length) phases.forEach(function(p){ totalTools += (p.tools||'').split('·').length; });
+    else totalTools = 14;
+
+    var html = '<div class="stats-row">' +
+    '<div class="stat-card"><div class="value">'+completed+'/'+todayGoals.length+'</div><div class="label">📊 计划完成状态</div></div>' +
+    '<div class="stat-card"><div class="value">'+(phases.length||4)+'</div><div class="label">📋 学习阶段</div></div>' +
+    '<div class="stat-card"><div class="value">'+totalTools+'</div><div class="label">🤖 涉及AI工具</div></div>' +
+    '</div>';
+    html += '<div class="section-title" id="learn-goals">🎯 今日目标拆解（AI生成）' + autoUpdateTag('learning') + '</div>';
+    html += '<div id="goalsList">';
+    todayGoals.forEach(function(g) {
+      html += '<div class="checkin-item">'+
+        '<div class="checkin-box '+(g.done?'checked':'')+'" onclick="toggleCheckin(\''+g.id+'\')">'+(g.done?'✓':'')+'</div>'+
+        '<span class="checkin-text '+(g.done?'done':'')+'">'+(g.text||'')+'</span></div>';
+    });
+    html += '</div>';
+
+    html += '<div class="section-title" id="learn-calendar">📅 学习日历与提醒</div>'+
+      '<div class="reminder-form">'+
+      '<div class="form-row">'+
+        '<label>⏰ 提醒时间</label>'+
+        '<input type="time" id="reminderTime" value="09:00" />'+
+        '<label>🔁 频率</label>'+
+        '<select id="reminderFreq"><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="custom">自定义</option></select>'+
+        '<label>📝 内容</label>'+
+        '<input type="text" id="reminderText" placeholder="如：学习DeepSeek提示词" style="flex:1;min-width:150px;" />'+
+        '<button class="btn-primary" style="padding:8px 16px;font-size:12px;" onclick="addReminder()">+ 添加提醒</button>'+
+      '</div>'+
+      '<div class="reminder-list" id="reminderList"></div></div>';
+
+    html += '<div class="mini-calendar" id="miniCal"></div>';
+    html += '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">🔴 红点表示有提醒 · 蓝色为今天</p>';
+
+    if (phases.length) {
+      html += '<div class="section-title" id="learn-timeline">🎯 '+(ld.month||'学习计划总览')+'</div><div class="timeline">';
+      phases.forEach(function(p) {
+        html += '<div class="timeline-item"><div class="timeline-dot">'+(p.icon||'📝')+'</div><div class="timeline-content"><h4>'+(p.week||'')+'：'+(p.title||'')+' <span style="font-size:12px;color:var(--text-muted);">'+(p.status||'')+'</span></h4><p>🎯 '+(p.goal||'')+'</p><p style="margin-top:4px;">🛠️ '+(p.tools||'')+'</p></div></div>';
+      });
+      html += '</div>';
+    }
+    container.innerHTML = html;
+    return;
+  }
+
+  // 回退：静态硬编码数据
   var todayGoals = [
     { id:'g1', text:'DeepSeek生成10条公寓文案（不同风格）', done:false },
     { id:'g2', text:'学习提示词工程第3章：角色设定+约束条件', done:false },
@@ -1783,6 +1898,34 @@ function selectCalDay(day) { showToast('📅 '+day+'日 — 点击"添加提醒"
 
 // ===== 7. CALENDAR MODULE =====
 function renderCalendar(container) {
+  // 尝试读取 AI 自动生成的选题日历数据
+  var cd = getAutoData('calendar');
+  if (cd && cd.plans && cd.plans.length) {
+    var plans = cd.plans;
+    var wt = cd.week_title || '🗓️ 本周选题规划（AI生成）';
+    var html = '<div class="stats-row">' +
+    '<div class="stat-card"><div class="value">'+plans.length+'</div><div class="label">📅 本周选题</div></div>' +
+    '<div class="stat-card"><div class="value">'+plans.length+'</div><div class="label">📋 选题详情</div></div>' +
+    '</div>';
+    html += '<div class="section-title" id="cal-plans">' + wt + autoUpdateTag('calendar') + '</div>';
+    html += '<div class="data-table"><table><thead><tr><th>日期</th><th>选题方向</th><th>脚本类型</th><th>目标人群</th><th>BGM</th><th>发布时间</th></tr></thead><tbody>';
+    plans.forEach(function(p) {
+      html += '<tr><td style="font-weight:700;">'+(p.day||'')+'</td><td>'+(p.title||'')+'</td><td><span class="card-tag tag-trend" style="font-size:10px;">'+(p.type||'')+'</span></td><td>'+(p.audience||'')+'</td><td>'+(p.bgm||'')+'</td><td>'+(p.time||'')+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<div class="section-title" id="cal-detail" style="margin-top:24px;">📋 每日详情与视频链接</div>';
+    plans.forEach(function(p) {
+      html += '<div class="content-card" style="margin-bottom:12px;">'+
+        '<h3>'+(p.day||'')+'：'+(p.title||'')+'</h3>'+
+        '<div class="card-meta"><span>📹 '+(p.type||'')+'</span><span>👥 '+(p.audience||'')+'</span><span>🎵 '+(p.bgm||'')+'</span><span>⏰ 发布时间 '+(p.time||'')+'</span></div>'+
+        '<p>📝 <strong>内容概括：</strong>'+(p.summary||'')+'</p>'+
+        '</div>';
+    });
+    container.innerHTML = html;
+    return;
+  }
+
+  // 回退：静态硬编码数据
   var days = ['周一 8/3','周二 8/4','周三 8/5','周四 8/6','周五 8/7','周六 8/8','周日 8/9'];
   var plans = [
     { day:'周一 8/3', title:'「毕业第30天，妈来上海看我的出租屋」', type:'反差吐槽型', audience:'应届毕业生', bgm:'节奏卡点+门铃音效', time:'18:30',
@@ -1839,6 +1982,65 @@ function renderCalendar(container) {
 
 // ===== 8. COMPETITOR RENDERER =====
 function renderCompetitor(container) {
+  // 尝试读取 AI 自动生成的竞品监控数据
+  var compD = getAutoData('competitor');
+  if (compD && compD.competitors && compD.competitors.length) {
+    var competitors = compD.competitors;
+    var insights = (compD.insights || []);
+    var cInsights = (compD.comment_insights || []);
+    var intel = (compD.industry_intel || {});
+    var totalPosts = competitors.reduce(function(s,c){return s+parseInt(c.posts||'0')},0);
+    var html = '<div class="stats-row">' +
+    '<div class="stat-card"><div class="value">'+competitors.length+'</div><div class="label">👁️ 监控品牌</div></div>' +
+    '<div class="stat-card"><div class="value">'+competitors.length+'</div><div class="label">🔥 热门视频</div></div>' +
+    '<div class="stat-card"><div class="value">'+(cInsights.length||5)+'</div><div class="label">📝 诉求分析</div></div>' +
+    '<div class="stat-card"><div class="value">'+(insights.length||3)+'</div><div class="label">💡 账号启示</div></div>' +
+    '</div>';
+    html += '<div class="section-title" id="comp-list">🏢 上海本地竞品本周表现（AI生成）' + autoUpdateTag('competitor') + '</div>'+
+      '<div class="data-table"><table><thead><tr><th>竞品账号</th><th>本周发布</th><th>最高点赞</th><th>热门主题</th></tr></thead><tbody>';
+    competitors.forEach(function(c) {
+      html += '<tr><td style="font-weight:600;">'+(c.name||'')+'</td><td>'+(c.posts||'')+'</td><td>'+(c.max_likes||'')+'</td><td>'+(c.hot_topic||'')+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+
+    html += '<div class="section-title" id="comp-hot">🔥 各竞品近期最热视频</div>';
+    competitors.forEach(function(c) {
+      var hv = c.hot_video || {};
+      if (hv.title) {
+        html += '<div class="content-card">'+
+          '<span class="card-tag tag-hot">🏆 '+(c.name||'')+' 最热视频</span>'+
+          '<h3>'+(hv.title||'')+'</h3>'+
+          '<p>📝 <strong>主题与内容概括：</strong>'+(hv.summary||'')+'</p>'+
+          '<p>📊 <strong>数据简析：</strong>'+(hv.data||'')+'</p>'+
+          '</div>';
+      }
+    });
+
+    if (cInsights.length) {
+      html += '<div class="section-title">💬 竞品评论区高频诉求 TOP'+cInsights.length+'</div><div class="content-card">';
+      cInsights.forEach(function(ci){ html += '<p>'+ci+'</p>'; });
+      html += '</div>';
+    }
+
+    if (intel.title) {
+      html += '<div class="section-title">🏙️ 行业情报</div><div class="content-card">'+
+        '<span class="card-tag tag-new">📡 '+(intel.tag||'行业情报')+'</span>'+
+        '<h3>'+(intel.title||'')+'</h3>'+
+        '<p>'+(intel.content||'')+'</p>'+
+        '</div>';
+    }
+
+    if (insights.length) {
+      html += '<div class="section-title">💡 对我方账号的'+insights.length+'条启示</div>';
+      insights.forEach(function(ins){
+        html += '<div class="content-card"><p>'+ins+'</p></div>';
+      });
+    }
+    container.innerHTML = html;
+    return;
+  }
+
+  // 回退：静态硬编码数据
   var competitors = [
     { name:'🏠 自如租房', posts:'5条', maxLikes:'2.3万', hotTopic:'毕业��专属优惠',
       hotVideo:{ title:'「自如毕业季大促：首月0元住」', summary:'视频以毕业季大促为主题，展示多个房源实拍，配合"首月0元"优惠政策。开头用毕业生离校画面切入，展示自如提供的灵活租期和免押金服务。评论区主要讨论房源位置和价格。', data:'播放 8.5万 · 点赞 2.3万 · 完播率 38% · 评论 1200+',
