@@ -48,6 +48,38 @@ COMPETITORS = [
 # ── 工具函数 ──────────────────────────────────────────
 
 
+class DeepSeekError(Exception):
+    """DeepSeek API 调用失败（区分余额不足 / Key无效 / 限频 / 网络）"""
+
+    def __init__(self, code, kind, message):
+        super().__init__(message)
+        self.code = code
+        self.kind = kind
+        self.message = message
+
+
+def classify_http_error(code, detail):
+    """把 HTTP 状态码映射为友好中文提示 + 类型标记"""
+    if code == 402:
+        return (
+            "DeepSeek 余额不足（HTTP 402），AI 模块本次未能更新。请到 DeepSeek 平台充值后，"
+            "到 GitHub 仓库 Actions 重新运行「每周热榜+BGM自动刷新」定时任务。",
+            "insufficient_balance",
+        )
+    if code == 401:
+        return (
+            "DeepSeek API Key 无效（HTTP 401）。请检查仓库 Settings → Secrets 中的 "
+            "DEEPSEEK_API_KEY 是否正确。",
+            "auth_fail",
+        )
+    if code == 429:
+        return (
+            "DeepSeek 触发限频（HTTP 429），本次 AI 生成被跳过，下一周期会自动重试。",
+            "rate_limit",
+        )
+    return ("DeepSeek 调用失败（HTTP %s）%s" % (code, detail), "api_error")
+
+
 def monday_of(d):
     return d - datetime.timedelta(days=d.weekday())
 
@@ -124,7 +156,12 @@ def fetch_platform(ptype, retries=2):
 
 
 def call_deepseek(system_prompt, user_prompt, retries=2):
-    """调用 DeepSeek API，返回文本内容。失败返回 None。"""
+    """调用 DeepSeek API，返回文本内容。
+
+    - 未配置 Key：返回 None（视为跳过，非错误）
+    - HTTP 401/402/429 等：抛出 DeepSeekError（带类型，供上层提示用户）
+    - 网络/未知异常：重试后抛出 DeepSeekError
+    """
     key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if not key:
         print("  [skip] DEEPSEEK_API_KEY 未配置，跳过 AI 生成", file=sys.stderr)
@@ -151,14 +188,40 @@ def call_deepseek(system_prompt, user_prompt, retries=2):
             text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             if text:
                 return text.strip()
+            # 200 但内容为空：不算错误，直接跳过该模块
             print("  [warn] DeepSeek 返回空内容", file=sys.stderr)
             return None
+        except urllib.error.HTTPError as e:
+            code = e.code
+            detail = ""
+            try:
+                err_body = json.loads(e.read().decode("utf-8"))
+                em = err_body.get("error")
+                if isinstance(em, dict):
+                    detail = em.get("message", "")
+                elif isinstance(em, str):
+                    detail = em
+                else:
+                    detail = err_body.get("message", "")
+            except Exception:
+                pass
+            msg, kind = classify_http_error(code, detail)
+            if attempt < retries:
+                print("  [retry] DeepSeek HTTP %s: %s（重试 %d）" % (code, msg, attempt + 1), file=sys.stderr)
+                continue
+            raise DeepSeekError(code, kind, msg)
+        except urllib.error.URLError as e:
+            last_err = e
+            if attempt < retries:
+                print("  [retry] DeepSeek 网络异常: %s（重试 %d）" % (e, attempt + 1), file=sys.stderr)
+                continue
+            raise DeepSeekError(None, "network", "无法连接 DeepSeek API：%s" % e)
         except Exception as e:
             last_err = e
             if attempt < retries:
                 continue
-    print("  [warn] DeepSeek 调用失败: %s" % last_err, file=sys.stderr)
-    return None
+            raise DeepSeekError(None, "unknown", "DeepSeek 调用异常：%s" % e)
+    raise DeepSeekError(None, "unknown", "DeepSeek 未知错误：%s" % last_err)
 
 
 def parse_json_from_text(text):
@@ -441,36 +504,79 @@ def build():
 
     has_key = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
 
+    # 读取旧数据：AI 生成失败时保留已有内容，避免清空模块
+    old_data = None
+    if os.path.exists("data/latest.json"):
+        try:
+            with open("data/latest.json", encoding="utf-8") as _f:
+                old_data = json.load(_f)
+        except Exception:
+            old_data = None
+
+    ds_error = None
     if has_key:
-        print("[2/4] AI生成: 爆款拆解 ...")
-        analysis_data = generate_analysis(hot_topics_text, today)
-        print("  -> %s" % ("成功" if analysis_data else "跳过"))
+        try:
+            print("[2/4] AI生成: 爆款拆解 ...")
+            analysis_data = generate_analysis(hot_topics_text, today)
+            print("  -> %s" % ("成功" if analysis_data else "跳过(空)"))
 
-        print("[3/4] AI生成: 选题日历 ...")
-        calendar_data = generate_calendar(hot_topics_text, today)
-        print("  -> %s" % ("成功" if calendar_data else "跳过"))
+            print("[3/4] AI生成: 选题日历 ...")
+            calendar_data = generate_calendar(hot_topics_text, today)
+            print("  -> %s" % ("成功" if calendar_data else "跳过(空)"))
 
-        print("[3/4] AI生成: 竞品监控 ...")
-        competitor_data = generate_competitor(hot_topics_text, today)
-        print("  -> %s" % ("成功" if competitor_data else "跳过"))
+            print("[3/4] AI生成: 竞品监控 ...")
+            competitor_data = generate_competitor(hot_topics_text, today)
+            print("  -> %s" % ("成功" if competitor_data else "跳过(空)"))
 
-        if is_monthly_first:
-            print("[4/4] AI生成: 学习计划（月度更新）...")
-            learning_data = generate_learning(today)
-            print("  -> %s" % ("成功" if learning_data else "跳过"))
-        else:
-            print("[4/4] 学习计划: 非月初，跳过（每月1号更新）")
+            if is_monthly_first:
+                print("[4/4] AI生成: 学习计划（月度更新）...")
+                learning_data = generate_learning(today)
+                print("  -> %s" % ("成功" if learning_data else "跳过(空)"))
+            else:
+                print("[4/4] 学习计划: 非月初，跳过（每月1号更新）")
+        except DeepSeekError as e:
+            ds_error = e
+            print("[error] DeepSeek 调用失败: %s" % e, file=sys.stderr)
     else:
         print("[skip] DEEPSEEK_API_KEY 未配置，所有 AI 模块跳过")
+
+    # 失败时保留旧 AI 数据，并标记 stale（前端会提示"数据非最新"）
+    ai_stale = False
+    if analysis_data is None and old_data and old_data.get("analysis"):
+        analysis_data = old_data["analysis"]; ai_stale = True
+    if calendar_data is None and old_data and old_data.get("calendar"):
+        calendar_data = old_data["calendar"]; ai_stale = True
+    if competitor_data is None and old_data and old_data.get("competitor"):
+        competitor_data = old_data["competitor"]; ai_stale = True
+    if learning_data is None and old_data and old_data.get("learning"):
+        learning_data = old_data["learning"]; ai_stale = True
+
+    # 构建 DeepSeek 状态，供前端提示「余额不足 / Key无效」等
+    now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not has_key:
+        ds_status = {"ok": False, "reason": "no_key",
+                     "message": "未配置 DEEPSEEK_API_KEY，AI 模块（爆款拆解/选题日历/竞品监控/学习计划）未更新。手动生成的脚本与热梗不受影响。",
+                     "checked_at": now_iso}
+    elif ds_error is not None:
+        ds_status = {"ok": False, "reason": ds_error.kind, "message": ds_error.message,
+                     "code": ds_error.code, "checked_at": now_iso}
+    else:
+        any_ai = any([analysis_data, calendar_data, competitor_data, learning_data])
+        ds_status = {"ok": any_ai, "checked_at": now_iso}
+        if not any_ai:
+            ds_status["reason"] = "empty"
+            ds_status["message"] = "本次 AI 模块未生成内容（可能返回空），请检查后重试。"
 
     # ═══ Step 5: 组装最终 payload ═══
     payload = {
         "week": iso_week_label(today),
         "week_label": week_range_label(today),
-        "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": now_iso,
         "source": "uapis.cn + deepseek",
         "hotspot": hotspot,
         "bgm": {"names": names},
+        "deepseek_status": ds_status,
+        "ai_stale": ai_stale,
     }
 
     if analysis_data:
@@ -498,6 +604,8 @@ def build():
     if learning_data:
         parts.append("学习计划✅")
 
+    print("[status] deepseek_status = %s" % json.dumps(ds_status, ensure_ascii=False))
+    print("[status] ai_stale = %s" % ai_stale)
     print("[done] data/latest.json 已写入: %s" % " + ".join(parts))
     return True
 
