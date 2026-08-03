@@ -765,9 +765,7 @@ async function fillBgmLiveSection() {
   renderDeepseekStatusBanner(data);
 }
 
-function renderBgmLive(data) {
-  var el = document.getElementById('bgmLiveSection');
-// ── 自动数据读取器：供各模块读取 AI 生成的周更/月更数据 ──
+// ── 自动数据读取器：供各模块读取 AI 生成的周更/月更数据（全局函数）──
 function getAutoData(key) {
   if (weeklyDataCache && weeklyDataCache[key]) return weeklyDataCache[key];
   return null;
@@ -778,6 +776,9 @@ function autoUpdateTag(label) {
   var t = weeklyDataCache.generated_at;
   return '<span style="display:inline-block;font-size:10px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">🤖 AI更新: ' + t.slice(0,16).replace('T',' ') + '</span>';
 }
+
+function renderBgmLive(data) {
+  var el = document.getElementById('bgmLiveSection');
   if (!el) return;
   var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
   var chips = data.bgm.names.slice(0, 40).map(function(nm) {
