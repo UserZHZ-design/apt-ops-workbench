@@ -627,8 +627,9 @@ function formatHot(v) {
   }
   return s;
 }
-function saveWeeklyLocal(d) { try { localStorage.setItem('apt_v4_weekly', JSON.stringify({ ts: Date.now(), data: d })); } catch(e){} }
-function loadWeeklyLocal() { try { var raw = localStorage.getItem('apt_v4_weekly'); if (raw) { var o = JSON.parse(raw); if (o && o.data) return o.data; } } catch(e){} return null; }
+var WEEKLY_LOCAL_KEY = 'apt_v4_weekly_v2';
+function saveWeeklyLocal(d) { try { localStorage.setItem(WEEKLY_LOCAL_KEY, JSON.stringify({ ts: Date.now(), data: d })); } catch(e){} }
+function loadWeeklyLocal() { try { var raw = localStorage.getItem(WEEKLY_LOCAL_KEY); if (raw) { var o = JSON.parse(raw); if (o && o.data) return o.data; } } catch(e){} return null; }
 
 async function fetchWeeklyLive() {
   var plats = [
@@ -757,9 +758,25 @@ async function fillBgmLiveSection() {
   if (!el) return;
   el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">🔥 正在加载本周热门BGM/话题...</div>';
   var data = await fetchWeeklyData(false);
-  if (!data || !data.bgm || !data.bgm.names || !data.bgm.names.length) {
-    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请检查网络或稍后重试。</div>';
+  if (!data) {
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无数据，请检查网络后点「🔄 立即刷新」重试。</div>';
     return;
+  }
+  // 如果没有 bgm.names，从热点数据中提取名字作为降级
+  if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
+    if (data.hotspot) {
+      var names = [];
+      ['douyin','rednote'].forEach(function(k) {
+        (data.hotspot[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
+      });
+      var seen = {}; var dedup = [];
+      names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
+      data.bgm = { names: dedup.slice(0, 40) };
+    }
+    if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
+      el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请点「🔄 立即刷新」重试。</div>';
+      return;
+    }
   }
   renderBgmLive(data);
   renderDeepseekStatusBanner(data);
