@@ -3,14 +3,14 @@
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
-  { id:'hotspot', name:'热梗捕手', desc:'手动更新', icon:'🔥', iconClass:'m1', badge:'每日', badgeClass:'badge-daily', title:'🔥 热梗捕手', subtitle:'抖音+小红书热点 · 手动添加 · 可展开文案', render:renderHotspot },
-  { id:'bgm', name:'BGM管家', desc:'手动更新', icon:'🎵', iconClass:'m2', badge:'每周', badgeClass:'badge-weekly', title:'🎵 BGM与音效管家', subtitle:'播放量TOP10 · 使用量TOP10 · 热门音效 · 网易云/QQ音乐链接', render:renderBGM },
-  { id:'analysis', name:'爆款拆解', desc:'手动输入', icon:'🔍', iconClass:'m3', badge:'每周', badgeClass:'badge-weekly', title:'🔍 爆款拆解', subtitle:'手动记录拆解 · 点赞破5000 · 播放破5万', render:renderAnalysis },
-  { id:'script', name:'脚本生成', desc:'模板参考', icon:'✍️', iconClass:'m4', badge:'按需', badgeClass:'badge-ondemand', title:'✍️ 脚本库', subtitle:'预设话题模板 · 3版风格脚本参考', render:renderScript },
+  { id:'hotspot', name:'热梗捕手', desc:'自动更新', icon:'🔥', iconClass:'m1', badge:'每日', badgeClass:'badge-daily', title:'🔥 热梗捕手', subtitle:'免费API · 抖音/小红书/微博/知乎 · 实时热榜', render:renderHotspot },
+  { id:'bgm', name:'BGM管家', desc:'自动更新', icon:'🎵', iconClass:'m2', badge:'每周', badgeClass:'badge-weekly', title:'🎵 BGM与音效管家', subtitle:'热门名字列表 · 点击搜抖音 · 免费API自动抓取', render:renderBGM },
+  { id:'analysis', name:'爆款拆解', desc:'AI自动生成', icon:'🔍', iconClass:'m3', badge:'每周', badgeClass:'badge-weekly', title:'🔍 爆款拆解', subtitle:'DeepSeek AI生成 · 高赞+高播放爆款 · 共性归纳', render:renderAnalysis },
+  { id:'script', name:'脚本生成', desc:'AI按需生成', icon:'✍️', iconClass:'m4', badge:'按需', badgeClass:'badge-ondemand', title:'✍️ 脚本库', subtitle:'输入话题 → DeepSeek AI生成多风格脚本', render:renderScript },
   { id:'data', name:'数据分析', desc:'手动导入', icon:'📊', iconClass:'m5', badge:'每周', badgeClass:'badge-weekly', title:'📊 数据分析', subtitle:'粘贴后台数据 · 手动分析 · 优化建议', render:renderData },
-  { id:'learning', name:'学习计划', desc:'每日打卡', icon:'📚', iconClass:'m6', badge:'每月', badgeClass:'badge-monthly', title:'📚 学习计划', subtitle:'每日目标 · 打卡 · 日历提醒', render:renderLearning },
-  { id:'calendar', name:'选题日历', desc:'每周规划', icon:'📅', iconClass:'m7', badge:'每周', badgeClass:'badge-weekly', title:'📅 内容选题日历', subtitle:'下周7天选题 · 视频内容概括 · 链接', render:renderCalendar },
-  { id:'competitor', name:'竞品监控', desc:'手动更新', icon:'👁️', iconClass:'m8', badge:'每周', badgeClass:'badge-weekly', title:'👁️ 竞品监控', subtitle:'竞品热视频 · 手动添加 · 视频链接', render:renderCompetitor },
+  { id:'learning', name:'学习计划', desc:'AI月度生成', icon:'📚', iconClass:'m6', badge:'每月', badgeClass:'badge-monthly', title:'📚 学习计划', subtitle:'DeepSeek AI生成月度目标 · 每日打卡追踪', render:renderLearning },
+  { id:'calendar', name:'选题日历', desc:'AI自动生成', icon:'📅', iconClass:'m7', badge:'每周', badgeClass:'badge-weekly', title:'📅 内容选题日历', subtitle:'DeepSeek AI生成 · 下周7天选题规划·详情', render:renderCalendar },
+  { id:'competitor', name:'竞品监控', desc:'AI自动生成', icon:'👁️', iconClass:'m8', badge:'每周', badgeClass:'badge-weekly', title:'👁️ 竞品监控', subtitle:'DeepSeek AI监控4品牌 · 热视频·评论区诉求', render:renderCompetitor },
   { id:'material', name:'素材管理', desc:'归档存储', icon:'📁', iconClass:'m9', badge:'持续', badgeClass:'badge-daily', title:'📁 素材归档', subtitle:'本地存储 · 分类管理 · 热梗/脚本/数据', render:renderMaterial }
 ];
 
