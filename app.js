@@ -704,13 +704,18 @@ async function fillHotspotLiveSection() {
   var el = document.getElementById('hotspotLiveSection');
   if (!el) return;
   el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">📡 正在加载实时热榜...</div>';
-  var data = await fetchWeeklyData(false);
-  if (!data || !data.hotspot) {
-    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂时无法加载实时热榜，请检查网络或稍后重试。</div>';
-    return;
+  try {
+    var data = weeklyDataCache || await fetchWeeklyData(false);
+    if (!data || !data.hotspot) {
+      el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂时无法加载实时热榜，请检查网络或稍后重试。</div>';
+      return;
+    }
+    renderHotspotLive(data);
+    renderDeepseekStatusBanner(data);
+  } catch(e) {
+    console.error('[HOTSPOT] 加载出错:', e);
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 热榜加载异常，请点「🔄 立即刷新」重试。</div>';
   }
-  renderHotspotLive(data);
-  renderDeepseekStatusBanner(data);
 }
 
 function renderHotspotLive(data) {
@@ -757,29 +762,38 @@ async function fillBgmLiveSection() {
   var el = document.getElementById('bgmLiveSection');
   if (!el) return;
   el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">🔥 正在加载本周热门BGM/话题...</div>';
-  var data = await fetchWeeklyData(false);
-  if (!data) {
-    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无数据，请检查网络后点「🔄 立即刷新」重试。</div>';
-    return;
-  }
-  // 如果没有 bgm.names，从热点数据中提取名字作为降级
-  if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
-    if (data.hotspot) {
-      var names = [];
-      ['douyin','rednote'].forEach(function(k) {
-        (data.hotspot[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
-      });
-      var seen = {}; var dedup = [];
-      names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
-      data.bgm = { names: dedup.slice(0, 40) };
+  try {
+    // 优先复用已有缓存（热点模块已加载过），避免重复请求失败
+    var data = weeklyDataCache;
+    if (!data || !data.hotspot) {
+      data = await fetchWeeklyData(false);
     }
-    if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
-      el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请点「🔄 立即刷新」重试。</div>';
+    if (!data) {
+      el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无数据，请检查网络后点「🔄 立即刷新」重试。</div>';
       return;
     }
+    // 如果没有 bgm.names，从热点数据中提取名字作为降级
+    if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
+      if (data.hotspot) {
+        var names = [];
+        ['douyin','rednote'].forEach(function(k) {
+          (data.hotspot[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
+        });
+        var seen = {}; var dedup = [];
+        names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
+        data.bgm = { names: dedup.slice(0, 40) };
+      }
+      if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
+        el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请点「🔄 立即刷新」重试。</div>';
+        return;
+      }
+    }
+    renderBgmLive(data);
+    renderDeepseekStatusBanner(data);
+  } catch(e) {
+    console.error('[BGM] 加载出错:', e);
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ BGM加载异常，请点「🔄 立即刷新」重试。</div>';
   }
-  renderBgmLive(data);
-  renderDeepseekStatusBanner(data);
 }
 
 // ── 自动数据读取器：供各模块读取 AI 生成的周更/月更数据（全局函数）──
