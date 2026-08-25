@@ -1391,7 +1391,9 @@ function renderData(container) {
   var analyses = getDataAnalyses();
   var html = '';
 
-  // ===== 1. 小红书账号分析向导（重点） =====
+  // v4.6.1: 数据分析模块顶部加 API Key 选择栏
+  html += renderApiKeyBar();
+
   html += '<div class="section-title" id="data-import">🎯 小红书账号分析</div>' +
     '<div class="content-card">' +
       '<p style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);">三步完成账号体检：<strong>输入账号 → 上传截图 → AI 拆解爆款 + 优化建议</strong></p>' +
@@ -1401,12 +1403,12 @@ function renderData(container) {
           '<option value="douyin">🎵 抖音</option>' +
           '<option value="wx">📹 视频号</option>' +
         '</select>' +
-        '<input type="text" id="dataAccountName" placeholder="📱 小红书账号昵称 / ID（如：上海租房日记）" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
+        '<input type="text" id="dataAccountName" placeholder="📱 小红书账号昵称 / ID" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
         '<select id="dataPeriod" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
           '<option value="近7天">近 7 天</option><option value="近30天" selected>近 30 天</option><option value="全部">全部笔记</option>' +
         '</select>' +
       '</div>' +
-      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 上传截图：账号主页 或 笔记数据页（AI 自动识别）</span></div>' +
+      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 上传截图：账号主页 或 笔记数据页</span></div>' +
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
         '<button class="btn-upload-img" onclick="document.getElementById(\'dataFileInput\').click()">📷 选择截图</button>' +
         '<span id="dataFileName" style="font-size:12px;color:var(--text-muted);">未选择图片（可上传主页/笔记列表/数据中心截图）</span>' +
@@ -1415,9 +1417,8 @@ function renderData(container) {
       '<div id="dataImagePreview" style="display:none;margin-top:12px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">' +
         '<img id="dataPreviewImg" src="" alt="预览" style="width:100%;max-height:300px;object-fit:contain;display:block;background:#f9fafb;" />' +
       '</div>' +
-      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 补充说明（可选 · 提高分析针对性）</span></div>' +
-      '<textarea id="dataRawInput" placeholder="例如：账号主打上海保租房，主推民用水电+押一付一；最近发的几篇数据下滑，想知道问题出在哪..." style="width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
-      '<p style="margin-top:10px;font-size:12px;color:var(--text-muted);">💡 需要在上方 API Key 栏选择「智谱 GLM-4V」并配置 Key（支持图片识别）</p>' +
+      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 补充说明（可选）</span></div>' +
+      '<textarea id="dataRawInput" placeholder="例如：账号主打上海保租房..." style="width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
       '<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn-ai" onclick="requestAIAnalysis()">🤖 AI 分析这个账号</button>' +
       '</div>' +
@@ -1453,13 +1454,11 @@ function renderData(container) {
     '</div>' +
     '</div>';
 
-  html += '<div class="section-title" id="data-history">📁 历史分析记录</div>';
-  html += renderDataHistoryList(analyses);
-
+  // v4.6.1 删掉历史分析记录 section
   container.innerHTML = html;
 }
 
-// v4.6: 小红书专版分析结果渲染（结构化）
+// v4.6: 小红书专版分析结果渲染（结构化）// v4.6: 小红书专版分析结果渲染（结构化）
 function renderXhsResult(a, isLatest) {
   var s = a.summary || {};
   var v = a.videos || [];
@@ -1526,74 +1525,7 @@ function selectDataPlatform(p) {
 }
 
 // AI分析结果（由AI助手写入，刷新后同步到工作台）
-var SERVER_ANALYSES = [
-  {
-    id: 'server_001',
-    date: '2026-08-01',
-    platform: 'wx',
-    platformName: '视频号',
-    period: '本周',
-    periodRange: '8/1 单条分析',
-    rawData: '欢迎收看旅游博主在上海的小家',
-    videos: [{title:'欢迎收看旅游博主在上海的小家 😎', plays: 0, completion:'4.1', jump2s:'41.5', likes:0, comments:0, note:'环比-9.9% / 完播率-59.19% / 平均播放8秒'}],
-    summary: { totalVideos:1, totalPlays:0, avgCompletion:'4.1', avgJump2s:'41.5', avgPlays:0, totalLikes:0, totalComments:0 },
-    aiAnalysis: '【核心问题：完播率暴跌59%】\n\n4.1%的完播率极低，通常租房类短视频完播率在15-35%之间。\n\n1. 前3秒钩子失效：41.5%的2秒跳出率绝对值偏高。标题里"旅游博主"吸引的是旅游粉而非租房粉，封面/标题把人"骗"进来了，但开头没留住。\n\n2. 视频节奏拖沓：平均播放8秒，完播率仅4.1%，反推视频总长约40秒。观众看了8秒就走，中间缺乏持续吸引力。\n\n3. 观看曲线断崖式下跌：前6秒快速降到25%，后续在10-15%徘徊，远低于同类租房作品（青色线）。\n\n4. 发布时间偏晚：19:30发布，与娱乐内容抢流量，建议改到18:00下班高峰。',
-    aiSuggestions: [
-      '修改标题：去掉"旅游博主"，改为"2000块在上海租的小家，值不值？"',
-      '重剪开头3秒：直接展示房间最美角度+大字"月租2000"，锚定租房人群',
-      '控制时长在30秒内：0-3秒价格→3-10秒展示→10-20秒日常→20-25秒周边→25-30秒引导',
-      '调整发布时间：从19:30改为18:00（下班路上刷手机高峰）',
-      '学习同类爆款的前3秒钩子、BGM节奏和字幕风格'
-    ]
-  },
-  {
-    id: 'server_002',
-    date: '2026-07-25',
-    platform: 'wx',
-    platformName: '视频号',
-    period: '本周',
-    periodRange: '7/19-7/25（7天）',
-    rawData: '7条视频数据汇总',
-    videos: [
-      {title:'租房能做饭真的省了很多钱！更适合租房党的公寓，月租2000起...', plays:24666, completion:'28.81', jump2s:'—', likes:59, comments:30, note:'分享17 · 平均播放9.98秒 · 7/21发布'},
-      {title:'不用合租了！毕业租房还得是公寓！2000起拥有独居生活...', plays:4575, completion:'18.73', jump2s:'—', likes:10, comments:11, note:'分享1 · 平均播放8.36秒 · 7/20发布'},
-      {title:'谁懂啊😭，2000块在上海租到了宠物友好公寓...', plays:2617, completion:'24.23', jump2s:'—', likes:7, comments:0, note:'分享0 · 平均播放9.28秒 · 7/25发布'},
-      {title:'欢迎收看ENFP在上海一人一狗的小窝！月租2200的loft...', plays:2026, completion:'15.45', jump2s:'—', likes:8, comments:0, note:'分享1 · 平均播放17.10秒 · 7/19发布'},
-      {title:'养宠人真的好爱这个公寓！8号线直达人广，月租1800起整租独厨独卫...', plays:1857, completion:'20.52', jump2s:'—', likes:2, comments:6, note:'分享0 · 平均播放9.04秒 · 7/23发布'},
-      {title:'独居有厨房真的很幸福谁懂！新家入住3个月爱上了做饭...', plays:1137, completion:'5.10', jump2s:'—', likes:2, comments:0, note:'分享0 · 平均播放31.61秒 · 7/24发布'},
-      {title:'做自己喜爱的事情是会发光的！欢迎收看微领地真实住户的家...', plays:1034, completion:'3.00', jump2s:'—', likes:3, comments:0, note:'分享0 · 平均播放14.46秒 · 7/22发布'}
-    ],
-    summary: { totalVideos:7, totalPlays:37912, avgCompletion:'16.5', avgJump2s:'—', avgPlays:5416, totalLikes:91, totalComments:47 },
-    aiAnalysis: '【7/19-7/25 视频号周度复盘】\n\n📊 数据总览\n• 发布7条视频，总播放37,912次\n• 平均完播率16.5%（行业中等，但方差极大）\n• 平均播放时长14.3秒\n• 总互动：点赞91 / 评论47 / 分享19\n\n🔥 爆款诊断：TOP1占65%流量\n「租房能做饭真的省了很多钱」单条播放24,666，占总流量65%。\n\n成功要素拆解：\n1. 标题直击痛点："能做饭+省钱"是租房人群最高频需求\n2. 价格锚定明确："月租2000起"在前3秒出现\n3. 时长适中：平均播放9.98秒，说明视频不长，节奏快\n4. 完播率28.81%：7条中最高，内容结构与观众预期高度匹配\n5. 互动最好：评论30条（有人咨询房源细节）\n\n📉 尾部视频分析：为什么后两条只有1000+播放？\n\n「独居有厨房真的很幸福」（7/24）\n• 完播率仅5.1%，平均播放31.61秒 → 视频太长，节奏拖沓\n• 标题无价格数字，"谁懂"情绪化表达无法激发租房刚需\n• 封面没有视觉冲击（3个月做饭日常 vs 一间房的价值）\n\n「做自己喜爱的事情是会发光的」（7/22）\n• 完播率仅3%，7条中最低\n• 标题完全无租房关键词，像励志鸡汤，算法不会推给租房人群\n• 平均播放14.46秒，说明即使点进来的人也不是目标用户\n\n💡 核心规律发现\n\n完播率与播放量强正相关：\n• 28.81% → 24,666播放\n• 24.23% → 2,617播放\n• 3.00% → 1,034播放\n\n完播率>20%的视频平均播放8,300+；完播率<6%的视频平均播放仅1,000+。\n\n爆款公式 = 价格数字（前3秒）+ 痛点词（做饭/独居/宠物）+ 时长<15秒',
-    aiSuggestions: [
-      '复制爆款模板：所有视频标题必须包含"月租XXX"+痛点词（做饭/独居/宠物），不要写情绪鸡汤',
-      '控制视频时长在15秒内：TOP3爆款平均播放时长9.2秒，尾部两条14-31秒，长视频在视频号完播率极低',
-      '删除"做自己喜爱的事情"这类无价格无痛点的标题，改写为"1800块整租独卫，养猫养狗随便住"',
-      '互动引导：评论区置顶"私信看房"，对评论"能做饭吗""地铁多久"的咨询必须24小时内回复',
-      '发布时间测试：TOP1是7/21发布，7/20发布的数据也不错，尝试固定在周二/周三18:00发布',
-      '弃用"谁懂""真的"等口语化开头，改为"月租2000|带厨房|独卫"信息密度更高的开头'
-    ]
-  },
-  {
-    id: 'server_003',
-    date: '2026-07-18',
-    platform: 'wx',
-    platformName: '视频号',
-    period: '本周',
-    periodRange: '7/18 单条分析',
-    rawData: '终于找到！上海能养宠的公寓！2000起整租',
-    videos: [{title:'终于找到！上海能养宠的公寓！2000起整...', plays:2202, completion:'19.55', jump2s:'26.16', likes:0, comments:0, note:'环比+217.98% / 完播率+67.99% / 2秒跳出-37.57% / 5秒完播40.13% / 平均播放8秒 / 播放占比56.11%'}],
-    summary: { totalVideos:1, totalPlays:2202, avgCompletion:'19.55', avgJump2s:'26.16', avgPlays:2202, totalLikes:0, totalComments:0 },
-    aiAnalysis: '【成功案例：播放量较往期暴涨218%】\n\n这条视频完播率从4.1%跃升到19.55%（+68%），2秒跳出率从41.5%降到26.16%（-38%），所有核心指标全面翻红。\n\n🔍 成功要素拆解\n\n1. 标题结构：情绪词+痛点+价格\n   "终于找到！上海能养宠的公寓！2000起整..."\n   vs 失败案例"欢迎收看旅游博主在上海的小家"\n   • "终于找到"制造稀缺感，引发好奇（vs "欢迎收看"毫无悬念）\n   • "养宠"是租房人群强刚需，上海带宠租房竞争极少\n   • "2000"价格数字在前3秒锚定价值\n\n2. 2秒跳出率暴跌38%：开头钩子彻底改对了\n   之前"旅游博主"开头吸引的是旅游粉，3秒内发现不是旅游内容立刻跳出。\n   现在"养宠公寓"精准命中租房人群，进来的观众就是被标题吸引的，自然愿意看下去。\n\n3. 平均播放占比56.11%（+117%）：内容持续吸引力翻倍\n   反推视频时长约14秒（8秒÷56.11%），比失败案例的40秒大幅缩短。\n   短、快、信息密度高，观众没机会疲劳。\n\n4. 5秒完播率40.13%：前5秒结构有效\n   说明"价格数字→房间展示→养宠细节"的信息传递节奏是对的。\n\n📊 对比分析：从4.1%到19.55%的跃迁\n\n| 指标 | 7/1 失败案例 | 7/18 成功案例 | 变化 |\n|------|------------|------------|------|\n| 完播率 | 4.1% | 19.55% | +377% |\n| 2秒跳出率 | 41.5% | 26.16% | -37% |\n| 平均播放占比 | 19.85% | 56.11% | +183% |\n| 标题关键词 | 旅游博主 | 养宠+2000 | — |\n\n💡 核心结论\n\n租房短视频的完播率密码 = 强痛点词（养宠/做饭/独居）+ 明确价格数字 + 情绪钩子（终于找到/不用合租了）+ 时长控制在15秒内。\n\n这条视频完美验证了之前5条建议中的前3条，说明优化方向完全正确。',
-    aiSuggestions: [
-      '复制"终于找到"的情绪钩子结构：所有标题以稀缺感/惊喜感开头，不要用"欢迎收看"',
-      '把"养宠"作为长期内容方向：上海带宠租房需求刚性、竞争少、完播率极高',
-      '保持14秒左右的视频时长：播放占比56%说明这个长度观众能接受，不要回到40秒',
-      '测试不同痛点词组合："养宠做饭""独居养宠""宠物友好公寓"等',
-      '虽然19:30发布效果好，但仍建议测试18:00发布，可能有更大流量池'
-    ]
-  }
-];
+var SERVER_ANALYSES = [];
 
 function getDataAnalyses() {
   var local = [];
