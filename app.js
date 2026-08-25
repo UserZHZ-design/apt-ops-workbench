@@ -665,13 +665,6 @@ async function fetchWeeklyLive() {
         }
       }).catch(function(e){ console.warn('[uapis ' + p.api + ']', e && e.message || e); });
   }));
-  var names = [];
-  ['douyin','rednote'].forEach(function(k) {
-    (results[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
-  });
-  var seen = {}; var dedup = [];
-  names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
-  names = dedup.slice(0, 40);
   var d = new Date();
   return {
     week: isoWeekLabel(d),
@@ -679,8 +672,9 @@ async function fetchWeeklyLive() {
     generated_at: d.toISOString(),
     live: true,
     source: 'uapis.cn',
-    hotspot: results,
-    bgm: { names: names }
+    hotspot: results
+    // 注意：BGM/音效是 AI 周更生成（list + sfx_list），实时拉取不更新
+    // 由 fetchWeeklyData() 从 localStorage/latest.json 缓存里保留 bgm 字段
   };
 }
 
@@ -698,11 +692,13 @@ async function fetchWeeklyData(forceLive) {
             try {
               var ld0 = await fetchWeeklyLive();
               if (ld0 && ld0.hotspot && Object.keys(ld0.hotspot).some(function(k){ return (ld0.hotspot[k]||[]).length > 0; })) {
-                // 实时热榜拉取成功，但保留仓库里的 AI 字段（analysis/calendar/competitor/learning）
+                // 实时热榜拉取成功，但保留仓库里的 AI 字段（analysis/calendar/competitor/learning + bgm/ref_ideas）
                 ld0.analysis = d.analysis || null;
                 ld0.calendar = d.calendar || null;
                 ld0.competitor = d.competitor || null;
                 ld0.learning = d.learning || null;
+                if (d.bgm) ld0.bgm = d.bgm;
+                if (d.ref_ideas) ld0.ref_ideas = d.ref_ideas;
                 ld0.ai_stale = true;
                 weeklyDataCache = ld0; saveWeeklyLocal(ld0); return ld0;
               }
@@ -717,7 +713,15 @@ async function fetchWeeklyData(forceLive) {
     var ld = await fetchWeeklyLive();
     if (ld && ld.hotspot) {
       var localKeep = weeklyDataCache || loadWeeklyLocal();
-      if (localKeep) { ld.analysis = ld.analysis || localKeep.analysis || null; ld.calendar = ld.calendar || localKeep.calendar || null; ld.competitor = ld.competitor || localKeep.competitor || null; ld.learning = ld.learning || localKeep.learning || null; }
+      if (localKeep) {
+        ld.analysis = ld.analysis || localKeep.analysis || null;
+        ld.calendar = ld.calendar || localKeep.calendar || null;
+        ld.competitor = ld.competitor || localKeep.competitor || null;
+        ld.learning = ld.learning || localKeep.learning || null;
+        // v4.5.5 修复：实时拉取也保留 AI 周更的 BGM/音效库（不被实时 hotspot 覆盖）
+        if (localKeep.bgm && localKeep.bgm.list) ld.bgm = localKeep.bgm;
+        if (localKeep.ref_ideas) ld.ref_ideas = localKeep.ref_ideas;
+      }
       weeklyDataCache = ld; saveWeeklyLocal(ld); return ld;
     }
   } catch(e){ console.warn('[周更数据] 实时拉取失败:', e && e.message || e); }
@@ -800,7 +804,7 @@ function setHotspotTab(k) {
 async function fillBgmLiveSection() {
   var el = document.getElementById('bgmLiveSection');
   if (!el) return;
-  el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">🔥 正在加载本周热门BGM/话题...</div>';
+  el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">🔥 正在加载本周热门BGM...</div>';
   try {
     // 优先复用已有缓存（热点模块已加载过），避免重复请求失败
     var data = weeklyDataCache;
@@ -811,22 +815,17 @@ async function fillBgmLiveSection() {
       el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无数据，请检查网络后点「🔄 立即刷新」重试。</div>';
       return;
     }
-    // 如果没有 bgm.names，从热点数据中提取名字作为降级
-    if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
-      if (data.hotspot) {
-        var names = [];
-        ['douyin','rednote'].forEach(function(k) {
-          (data.hotspot[k] || []).forEach(function(it) { if (it.title) names.push(it.title); });
-        });
-        var seen = {}; var dedup = [];
-        names.forEach(function(n) { if (!seen[n]) { seen[n] = 1; dedup.push(n); } });
-        data.bgm = { names: dedup.slice(0, 40) };
-      }
-      if (!data.bgm || !data.bgm.names || !data.bgm.names.length) {
-        el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂无可加载的BGM名单，请点「🔄 立即刷新」重试。</div>';
-        return;
-      }
+    // v4.5.5 修复：BGM/音效完全靠 AI 周更生成（list + sfx_list），不从热点 title 拼话题名
+    // 如果实时拉取后 bgm 字段缺失（fetchWeeklyData 已尝试保留），再去 localStorage 取一次
+    if (!data.bgm || (!data.bgm.list && !data.bgm.sfx_list)) {
+      try {
+        var local = loadWeeklyLocal();
+        if (local && local.bgm && (local.bgm.list || local.bgm.sfx_list)) {
+          data.bgm = local.bgm;
+        }
+      } catch(e) {}
     }
+    if (!data.bgm) data.bgm = { list: [], sfx_list: [] };
     renderBgmLive(data);
     renderDeepseekStatusBanner(data);
   } catch(e) {
