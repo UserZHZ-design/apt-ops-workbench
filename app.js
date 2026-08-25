@@ -470,30 +470,17 @@ function renderHotspot(container) {
   hotspots.forEach(function(h){ counts[h.cat]++; });
 
   var html = renderApiKeyBar() +
-    '<div id="hotspotAISection" style="margin-bottom:22px;"></div>' +
-    '<div id="hotspotLiveSection" style="margin-bottom:22px;"></div>' +
-    '<div class="section-title">📚 历史参考热梗（往期·可改编）</div>' +
-    '<div class="stats-row">' +
-    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-hot\')"><div class="stat-value">'+hotspots.length+'</div><div class="stat-label">今日热点话题</div></div>' +
-    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-hot\')"><div class="stat-value">'+counts.hot+'</div><div class="stat-label">🔥 可直接改编</div></div>' +
-    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-ref\')"><div class="stat-value">'+counts.ref+'</div><div class="stat-label">👀 可参考创意</div></div>' +
-    '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'cat-skip\')"><div class="stat-value">'+counts.skip+'</div><div class="stat-label">⏳ 暂不适合</div></div>' +
-    '</div>';
+    '<div id=\"hotspotAISection\" style=\"margin-bottom:22px;\"></div>' +
+    '<div id=\"hotspotLiveSection\" style=\"margin-bottom:22px;\"></div>';
 
-  var categories = [
-    {key:'hot', title:'🔥 可直接改编（含可使用文案）', desc:'热度高+与租房赛道强相关，建议本周改编使用'},
-    {key:'ref', title:'👀 可参考创意（含可使用文案）', desc:'创意角度好，可借鉴思路进行二次创作'},
-    {key:'skip', title:'⏳ 暂不适合', desc:'当前与赛道关联弱，暂不推荐改编'}
-  ];
-
-  categories.forEach(function(cat) {
-    var items = hotspots.filter(function(h){return h.cat===cat.key});
-    if (items.length===0) return;
-    html += '<div class="section-title" id="cat-'+cat.key+'">'+cat.title+'</div>';
-    html += '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">'+cat.desc+'</p>';
+  // 可参考创意（与本周热梗同区展示，不再折叠）
+  var refItems = hotspots.filter(function(h){return h.cat==='ref'});
+  if (refItems.length > 0) {
+    html += '<div class="section-title" style="margin-top:22px;">👀 可参考创意（经典角度，可借鉴思路二次创作）</div>';
+    html += '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">以下创意角度好，可借鉴思路进行二次创作，与本周热梗同区展示方便随时取用</p>';
     html += '<div class="card-grid">';
-    items.forEach(function(h, i) {
-      var capId = 'cap-'+cat.key+'-'+i;
+    refItems.forEach(function(h, i) {
+      var capId = 'cap-ref-'+i;
       var capHtml = '';
       if (h.captions) {
         capHtml = '<button class="expand-btn" onclick="toggleExpand(\''+capId+'\')">📝 查看可使用文案 ('+h.captions.length+')</button>';
@@ -513,8 +500,7 @@ function renderHotspot(container) {
       '</div>';
     });
     html += '</div>';
-  });
-
+  }
   html += '<div class="section-title">🔗 全网热点来源</div>' +
     '<div class="source-links" style="background:var(--card);padding:14px 18px;border-radius:var(--radius);flex-wrap:wrap;">' +
     sourceLink('https://www.douyin.com/hot','抖音热点榜') +
