@@ -469,9 +469,9 @@ function renderHotspot(container) {
   var counts={hot:0,ref:0,skip:0};
   hotspots.forEach(function(h){ counts[h.cat]++; });
 
-  var html = renderApiKeyBar() +
-    '<div id=\"hotspotAISection\" style=\"margin-bottom:22px;\"></div>' +
-    '<div id=\"hotspotLiveSection\" style=\"margin-bottom:22px;\"></div>';
+  // v4.5.8: 实时热榜置顶（蓝紫渐变折叠框样式）
+  var html = '<div id=\"hotspotLiveSection\" style=\"margin-bottom:22px;\"></div>' + renderApiKeyBar() +
+    '<div id=\"hotspotAISection\" style=\"margin-bottom:22px;\"></div>';
 
   // 可参考创意：优先读 AI 周更数据，无数据时降级到硬编码示例
   var refItems = [];
