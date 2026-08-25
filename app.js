@@ -303,16 +303,38 @@ async function callDeepSeek(prompt, opts) {
 }
 
 function renderApiKeyBar() {
-  var saved = !!localStorage.getItem('deepseek_api_key');
-  var status = saved
-    ? '<span style="color:#16a34a;font-size:12px;">✅ 已连接</span>'
+  var provider = localStorage.getItem('ai_provider') || 'deepseek';
+  var dsSaved = !!localStorage.getItem('deepseek_api_key');
+  var zpSaved = !!localStorage.getItem('zhipu_api_key');
+  var activeKey = provider === 'zhipu' ? zpSaved : dsSaved;
+  var status = activeKey
+    ? '<span style="color:#16a34a;font-size:12px;">✅ 已连接 ' + (provider === 'zhipu' ? '智谱' : 'DeepSeek') + '</span>'
     : '<span style="color:#dc2626;font-size:12px;">⚠️ 未设置</span>';
+  var placeholder = provider === 'zhipu'
+    ? '粘贴你的智谱 API Key（智谱新用户有 2000 万 token 免费额度，支持图片识别）'
+    : '粘贴你的 DeepSeek API Key (sk-...) — 仅支持文本分析';
+  var models = provider === 'zhipu'
+    ? '<span style="font-size:11px;color:var(--text-muted);">🤖 模型：GLM-4V-Plus（视觉）</span>'
+    : '<span style="font-size:11px;color:var(--text-muted);">🤖 模型：deepseek-chat（仅文本）</span>';
   return '<div id="apiKeyBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;">' +
-    '<span style="font-size:13px;">🔑 DeepSeek API Key</span>' +
-    '<input id="apiKeyInput" type="password" placeholder="粘贴你的 DeepSeek API Key (sk-...)" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);">' +
+    '<span style="font-size:13px;">🔑 AI Key</span>' +
+    '<select id="aiProviderSelect" onchange="switchAiProvider()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);">' +
+      '<option value="deepseek"' + (provider === 'deepseek' ? ' selected' : '') + '>DeepSeek（仅文本）</option>' +
+      '<option value="zhipu"' + (provider === 'zhipu' ? ' selected' : '') + '>智谱 GLM-4V（支持图片）</option>' +
+    '</select>' +
+    '<input id="apiKeyInput" type="password" placeholder="' + placeholder + '" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--bg);color:var(--text);">' +
     '<button onclick="saveApiKey()" style="padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;">保存</button>' +
-    status +
+    status + models +
     '</div>';
+}
+
+function switchAiProvider() {
+  var sel = document.getElementById('aiProviderSelect');
+  if (!sel) return;
+  localStorage.setItem('ai_provider', sel.value);
+  var bar = document.getElementById('apiKeyBar');
+  if (bar) bar.outerHTML = renderApiKeyBar();
+  showToast('已切换到 ' + (sel.value === 'zhipu' ? '智谱 GLM-4V' : 'DeepSeek'));
 }
 
 function saveApiKey() {
@@ -320,8 +342,10 @@ function saveApiKey() {
   if (!inp) return;
   var v = inp.value.trim();
   if (!v) { showToast('请输入 Key'); return; }
-  localStorage.setItem('deepseek_api_key', v);
-  showToast('✅ API Key 已保存（仅存于本机浏览器）');
+  var provider = localStorage.getItem('ai_provider') || 'deepseek';
+  var keyName = provider === 'zhipu' ? 'zhipu_api_key' : 'deepseek_api_key';
+  localStorage.setItem(keyName, v);
+  showToast('✅ ' + (provider === 'zhipu' ? '智谱' : 'DeepSeek') + ' API Key 已保存');
   var bar = document.getElementById('apiKeyBar');
   if (bar) bar.outerHTML = renderApiKeyBar();
 }
@@ -1614,24 +1638,28 @@ function requestAIAnalysis() {
     showToast('✏️ 文字数据已收到！当前版本只支持截图分析，请上传账号主页或后台数据截图');
     return;
   }
-  // 截图模式：直接调 DeepSeek vision 解析
-  // v4.5.11 修复: 与热梗捕手模块统一使用 localStorage key 'deepseek_api_key'
+  // v4.5.12: 根据用户选择的 AI provider 调对应 vision API
+  var provider = localStorage.getItem('ai_provider') || 'deepseek';
   var apiKey = '';
-  try { apiKey = localStorage.getItem('deepseek_api_key') || ''; } catch(e) {}
+  try {
+    apiKey = provider === 'zhipu'
+      ? (localStorage.getItem('zhipu_api_key') || '')
+      : (localStorage.getItem('deepseek_api_key') || '');
+  } catch(e) {}
   if (!apiKey) {
-    showToast('🔑 请先在热梗捕手模块配置 DeepSeek API Key');
+    showToast('🔑 请先在上方选择 AI provider 并配置 API Key（智谱支持图片识别）');
     return;
   }
-  callDeepSeekVision(apiKey, accountName, dataPlatform, img.src, raw)
-    .then(function(analysis) {
-      // 渲染分析结果到「最新分析结果」区域
+  var apiPromise = provider === 'zhipu'
+    ? callZhipuVision(apiKey, accountName, dataPlatform, img.src, raw)
+    : callDeepSeekVision(apiKey, accountName, dataPlatform, img.src, raw);
+  apiPromise.then(function(analysis) {
       renderAnalysisResultIntoPage(analysis);
-      // 同时保存到 localStorage
       var list = getDataAnalyses();
       list.unshift(analysis);
       if (list.length > 20) list = list.slice(0, 20);
       setDataAnalyses(list);
-      showToast('✅ 分析完成！共识别 ' + (analysis.videos || []).length + ' 条作品');
+      showToast('✅ 分析完成（' + (provider === 'zhipu' ? '智谱 GLM-4V' : 'DeepSeek') + '）· 共识别 ' + (analysis.videos || []).length + ' 条作品');
     })
     .catch(function(err) {
       console.error('[AI分析失败]', err);
@@ -1639,7 +1667,90 @@ function requestAIAnalysis() {
     });
 }
 
-// v4.5.10: 调用 DeepSeek vision API 识别账号截图
+// v4.5.12: 调用智谱 GLM-4V vision API 识别账号截图（OpenAI 兼容格式）
+function callZhipuVision(apiKey, accountName, platform, imageDataUrl, extraText) {
+  var platformNames = { douyin: '抖音', xhs: '小红书', wx: '视频号' };
+  var platformName = platformNames[platform] || platform;
+  var promptText = '你是长租公寓新媒体运营专家，擅长基于截图分析账号表现。\n\n' +
+    '请分析这张「' + (accountName || '未命名') + '」' + platformName + '账号的截图，识别出：\n' +
+    '1. 账号昵称和 ID\n' +
+    '2. 近一周（最近 7 天）的作品列表：标题、播放量、点赞数、评论数、收藏数、分享数、发布时间\n' +
+    '3. 关键指标：总作品数、总播放、平均播放、平均点赞、平均评论、互动率\n' +
+    '4. TOP3 爆款 + 失败案例\n' +
+    '5. 整体趋势判断 + 优化建议（至少 5 条具体可执行的建议）\n\n' +
+    (extraText ? '用户额外补充说明：' + extraText + '\n\n' : '') +
+    '请严格以 JSON 格式返回，结构如下：\n' +
+    '{\n' +
+    '  "account_name": "识别出的账号昵称",\n' +
+    '  "account_id": "识别出的账号ID（如有）",\n' +
+    '  "platform": "' + platformName + '",\n' +
+    '  "period": "2026-08-XX 至 2026-08-XX",\n' +
+    '  "videos": [\n' +
+    '    {"title": "作品标题", "plays": 12345, "likes": 234, "comments": 12, "shares": 5, "favorites": 30, "time": "08-20", "duration": "00:30"}\n' +
+    '  ],\n' +
+    '  "summary": {\n' +
+    '    "totalVideos": 7, "totalPlays": 50000, "avgPlays": 7143,\n' +
+    '    "totalLikes": 1200, "avgLikes": 171, "totalComments": 80,\n' +
+    '    "interaction_rate": 2.5, "bestVideo": "标题", "worstVideo": "标题"\n' +
+    '  },\n' +
+    '  "insights": "深度分析文字（500字以上）...",\n' +
+    '  "suggestions": ["建议1", "建议2", "建议3", "建议4", "建议5"]\n' +
+    '}\n\n' +
+    '只返回 JSON，不要任何其他文字。';
+  return fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    },
+    body: JSON.stringify({
+      model: 'glm-4v-plus',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: promptText },
+          { type: 'image_url', image_url: { url: imageDataUrl } }
+        ]
+      }],
+      max_tokens: 4000,
+      temperature: 0.3
+    })
+  }).then(function(resp) {
+    if (!resp.ok) {
+      return resp.json().then(function(j) {
+        throw new Error('智谱 HTTP ' + resp.status + ': ' + (j.error && j.error.message || resp.statusText));
+      });
+    }
+    return resp.json();
+  }).then(function(data) {
+    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!text) throw new Error('智谱返回为空');
+    var jsonText = text;
+    var m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (m) jsonText = m[1].trim();
+    var parsed;
+    try { parsed = JSON.parse(jsonText); }
+    catch(e) { throw new Error('JSON 解析失败：' + e.message + '\n原文：' + text.substring(0, 200)); }
+    return {
+      id: 'analysis_' + Date.now(),
+      date: formatDate(new Date()),
+      platform: platform,
+      platformName: platformName,
+      period: parsed.period || '本周',
+      periodRange: parsed.period || '近一周',
+      accountName: parsed.account_name || accountName || '',
+      accountId: parsed.account_id || '',
+      rawData: extraText || '',
+      hasImage: true,
+      imageData: imageDataUrl,
+      videos: parsed.videos || [],
+      summary: parsed.summary || {},
+      aiAnalysis: parsed.insights || '',
+      aiSuggestions: parsed.suggestions || []
+    };
+  });
+}
+
 function callDeepSeekVision(apiKey, accountName, platform, imageDataUrl, extraText) {
   var platformNames = { douyin: '抖音', xhs: '小红书', wx: '视频号' };
   var platformName = platformNames[platform] || platform;
