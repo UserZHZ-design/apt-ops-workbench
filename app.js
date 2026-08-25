@@ -1615,8 +1615,9 @@ function requestAIAnalysis() {
     return;
   }
   // 截图模式：直接调 DeepSeek vision 解析
+  // v4.5.11 修复: 与热梗捕手模块统一使用 localStorage key 'deepseek_api_key'
   var apiKey = '';
-  try { apiKey = localStorage.getItem('deepseek_key') || ''; } catch(e) {}
+  try { apiKey = localStorage.getItem('deepseek_api_key') || ''; } catch(e) {}
   if (!apiKey) {
     showToast('🔑 请先在热梗捕手模块配置 DeepSeek API Key');
     return;
