@@ -1378,37 +1378,37 @@ function renderData(container) {
   '</div>';
 
   // 数据导入区
-  html += '<div class="section-title" id="data-import">📥 录入本周数据</div>' +
+  html += '<div class="section-title" id="data-import">📥 上传账号截图 · AI 自动分析</div>' +
     '<div class="content-card">' +
-    '<p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">从后台导出数据后，选择以下任一方式录入，我会帮你做深度分析。</p>' +
+    '<p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">💡 输入账号昵称/ID + 上传账号主页或后台数据截图，DeepSeek Vision AI 帮你识别作品列表和关键指标，并生成优化建议。</p>' +
+    // 账号名输入 + 平台 + 时间
+    '<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">' +
+      '<input type="text" id="dataAccountName" placeholder="📱 账号昵称/ID（如：上海租房日记）" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
+      '<select id="dataPeriod" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
+        '<option value="近一周">近一周（7天）</option><option value="近两周">近两周（14天）</option><option value="近一月">近一月（30天）</option>' +
+      '</select>' +
+    '</div>' +
     '<div class="data-platform-tabs" style="display:flex;gap:8px;margin-bottom:12px;">' +
       '<button class="data-pbtn active" data-dp="douyin" onclick="selectDataPlatform(\'douyin\')">🎵 抖音</button>' +
       '<button class="data-pbtn" data-dp="xhs" onclick="selectDataPlatform(\'xhs\')">📕 小红书</button>' +
       '<button class="data-pbtn" data-dp="wx" onclick="selectDataPlatform(\'wx\')">📹 视频号</button>' +
     '</div>' +
-    '<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">' +
-      '<select id="dataPeriod" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
-        '<option value="本周">本周</option><option value="上周">上周</option><option value="自定义">自定义</option>' +
-      '</select>' +
-      '<input type="text" id="dataPeriodRange" placeholder="如：7/28-8/3" style="flex:1;min-width:140px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
-    '</div>' +
-    // 方式1：文字输入
-    '<div style="margin-bottom:8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 方式一：粘贴文字</span></div>' +
-    '<textarea id="dataRawInput" placeholder="粘贴后台复制的表格文字，支持自动识别播放量、完播率、2秒跳出率等数据" style="width:100%;min-height:100px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
-    // 方式2：图片上传
-    '<div style="margin:16px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 方式二：上传截图</span></div>' +
-    '<div style="display:flex;align-items:center;gap:10px;">' +
-      '<button class="btn-upload-img" onclick="document.getElementById(\'dataFileInput\').click()">📷 选择图片</button>' +
+    // 截图上传
+    '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 上传账号主页或后台数据截图（DeepSeek AI 自动识别）</span></div>' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<button class="btn-upload-img" onclick="document.getElementById(\'dataFileInput\').click()">📷 选择截图</button>' +
       '<span id="dataFileName" style="font-size:12px;color:var(--text-muted);">未选择图片</span>' +
       '<input type="file" id="dataFileInput" accept="image/*" style="display:none;" onchange="handleDataImage(event)" />' +
     '</div>' +
     '<div id="dataImagePreview" style="display:none;margin-top:12px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">' +
       '<img id="dataPreviewImg" src="" alt="预览" style="width:100%;max-height:300px;object-fit:contain;display:block;background:#f9fafb;" />' +
     '</div>' +
-    '<p style="margin-top:12px;font-size:12px;color:var(--text-muted);">💡 二选一即可，同时填写更好</p>' +
+    // 可选：文字补充
+    '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 可选：手动补充数据或问题（提高分析准确度）</span></div>' +
+    '<textarea id="dataRawInput" placeholder="例如：账号是上海某长租公寓官方号，主推民用水电+押一付一的卖点..." style="width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
+    '<p style="margin-top:12px;font-size:12px;color:var(--text-muted);">💡 需要先在热梗捕手模块配置 DeepSeek API Key 才能启用 AI 视觉分析</p>' +
     '<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">' +
-      '<button class="btn-search" onclick="saveDataAnalysis()">💾 保存数据</button>' +
-      '<button class="btn-ai" onclick="requestAIAnalysis()">🤖 请AI分析</button>' +
+      '<button class="btn-ai" onclick="requestAIAnalysis()">🤖 DeepSeek AI 分析账号</button>' +
     '</div>' +
     '</div>';
 
@@ -1605,15 +1605,140 @@ function saveDataAnalysis() {
 }
 
 function requestAIAnalysis() {
+  var accountName = (document.getElementById('dataAccountName') || {}).value || '';
   var raw = document.getElementById('dataRawInput').value.trim();
   var img = document.getElementById('dataPreviewImg');
   var hasImage = img && img.src && img.src.indexOf('data:image') === 0;
   if (!raw && !hasImage) { showToast('请填写文字数据或上传截图后再请求分析'); return; }
-  if (hasImage) {
-    showToast('📷 截图已收到！请把同一张截图发到当前聊天，我来帮你深度分析');
-  } else {
-    showToast('✏️ 数据已收到！如需深度分析，可把后台截图发到当前聊天');
+  if (!hasImage) {
+    showToast('✏️ 文字数据已收到！当前版本只支持截图分析，请上传账号主页或后台数据截图');
+    return;
   }
+  // 截图模式：直接调 DeepSeek vision 解析
+  var apiKey = '';
+  try { apiKey = localStorage.getItem('deepseek_key') || ''; } catch(e) {}
+  if (!apiKey) {
+    showToast('🔑 请先在热梗捕手模块配置 DeepSeek API Key');
+    return;
+  }
+  callDeepSeekVision(apiKey, accountName, dataPlatform, img.src, raw)
+    .then(function(analysis) {
+      // 渲染分析结果到「最新分析结果」区域
+      renderAnalysisResultIntoPage(analysis);
+      // 同时保存到 localStorage
+      var list = getDataAnalyses();
+      list.unshift(analysis);
+      if (list.length > 20) list = list.slice(0, 20);
+      setDataAnalyses(list);
+      showToast('✅ 分析完成！共识别 ' + (analysis.videos || []).length + ' 条作品');
+    })
+    .catch(function(err) {
+      console.error('[AI分析失败]', err);
+      showToast('❌ 分析失败：' + (err.message || '网络异常'));
+    });
+}
+
+// v4.5.10: 调用 DeepSeek vision API 识别账号截图
+function callDeepSeekVision(apiKey, accountName, platform, imageDataUrl, extraText) {
+  var platformNames = { douyin: '抖音', xhs: '小红书', wx: '视频号' };
+  var platformName = platformNames[platform] || platform;
+  var promptText = '你是长租公寓新媒体运营专家，擅长基于截图分析账号表现。\n\n' +
+    '请分析这张「' + (accountName || '未命名') + '」' + platformName + '账号的截图，识别出：\n' +
+    '1. 账号昵称和 ID\n' +
+    '2. 近一周（最近 7 天）的作品列表：标题、播放量、点赞数、评论数、收藏数、分享数、发布时间\n' +
+    '3. 关键指标：总作品数、总播放、平均播放、平均点赞、平均评论、互动率\n' +
+    '4. TOP3 爆款 + 失败案例\n' +
+    '5. 整体趋势判断 + 优化建议（至少 5 条具体可执行的建议）\n\n' +
+    (extraText ? '用户额外补充说明：' + extraText + '\n\n' : '') +
+    '请严格以 JSON 格式返回，结构如下：\n' +
+    '{\n' +
+    '  "account_name": "识别出的账号昵称",\n' +
+    '  "account_id": "识别出的账号ID（如有）",\n' +
+    '  "platform": "' + platformName + '",\n' +
+    '  "period": "2026-08-XX 至 2026-08-XX",\n' +
+    '  "videos": [\n' +
+    '    {"title": "作品标题", "plays": 12345, "likes": 234, "comments": 12, "shares": 5, "favorites": 30, "time": "08-20", "duration": "00:30"}\n' +
+    '  ],\n' +
+    '  "summary": {\n' +
+    '    "totalVideos": 7, "totalPlays": 50000, "avgPlays": 7143,\n' +
+    '    "totalLikes": 1200, "avgLikes": 171, "totalComments": 80,\n' +
+    '    "interaction_rate": 2.5, "bestVideo": "标题", "worstVideo": "标题"\n' +
+    '  },\n' +
+    '  "insights": "深度分析文字（500字以上）...",\n' +
+    '  "suggestions": ["建议1", "建议2", "建议3", "建议4", "建议5"]\n' +
+    '}\n\n' +
+    '只返回 JSON，不要任何其他文字。';
+  return fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: promptText },
+          { type: 'image_url', image_url: { url: imageDataUrl } }
+        ]
+      }],
+      max_tokens: 4000,
+      temperature: 0.3
+    })
+  }).then(function(resp) {
+    if (!resp.ok) {
+      return resp.json().then(function(j) {
+        throw new Error('DeepSeek HTTP ' + resp.status + ': ' + (j.error && j.error.message || resp.statusText));
+      });
+    }
+    return resp.json();
+  }).then(function(data) {
+    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!text) throw new Error('DeepSeek 返回为空');
+    // 解析 JSON（可能被 ```json ... ``` 包起来）
+    var jsonText = text;
+    var m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (m) jsonText = m[1].trim();
+    var parsed;
+    try { parsed = JSON.parse(jsonText); }
+    catch(e) { throw new Error('JSON 解析失败：' + e.message + '\n原文：' + text.substring(0, 200)); }
+    return {
+      id: 'analysis_' + Date.now(),
+      date: formatDate(new Date()),
+      platform: platform,
+      platformName: platformName,
+      period: parsed.period || '本周',
+      periodRange: parsed.period || '近一周',
+      accountName: parsed.account_name || accountName || '',
+      accountId: parsed.account_id || '',
+      rawData: extraText || '',
+      hasImage: true,
+      imageData: imageDataUrl,
+      videos: parsed.videos || [],
+      summary: parsed.summary || {},
+      aiAnalysis: parsed.insights || '',
+      aiSuggestions: parsed.suggestions || []
+    };
+  });
+}
+
+// v4.5.10: 把 AI 分析结果直接渲染到页面（不重 renderData）
+function renderAnalysisResultIntoPage(a) {
+  var target = document.getElementById('dataResultSection');
+  if (!target) {
+    // 第一次分析：在「最新分析结果」section-title 前插入
+    var dataHistoryTitle = document.getElementById('data-history');
+    if (dataHistoryTitle) {
+      target = document.createElement('div');
+      target.id = 'dataResultSection';
+      dataHistoryTitle.parentNode.insertBefore(target, dataHistoryTitle);
+    } else {
+      return;
+    }
+  }
+  target.innerHTML = renderAnalysisResult(a);
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function parseVideoData(raw) {
@@ -1773,17 +1898,61 @@ function handleDataImage(e) {
   var file = e.target.files[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) { showToast('请选择图片文件'); return; }
-  var reader = new FileReader();
-  reader.onload = function(ev) {
+  showToast('📷 正在压缩图片...');
+  compressImage(file, 1024).then(function(dataUrl) {
     var img = document.getElementById('dataPreviewImg');
     var preview = document.getElementById('dataImagePreview');
     var fileName = document.getElementById('dataFileName');
-    if (img) img.src = ev.target.result;
+    if (img) img.src = dataUrl;
     if (preview) preview.style.display = 'block';
-    if (fileName) fileName.textContent = file.name + ' ✓';
+    if (fileName) {
+      var kb = Math.round(dataUrl.length * 3 / 4 / 1024);
+      fileName.textContent = file.name + ' (已压缩到 ' + kb + ' KB) ✓';
+    }
     showToast('📷 图片已上传');
-  };
-  reader.readAsDataURL(file);
+  }).catch(function(err) {
+    showToast('❌ 压缩失败：' + err.message);
+  });
+}
+
+// v4.5.10: 压缩图片到目标 KB 以内（支持 JPEG 质量迭代压缩）
+function compressImage(file, maxKB) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var w = img.width, h = img.height;
+        // 限制最大边 1600（账号截图够用了）
+        var maxDim = 1600;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        // 迭代压缩质量直到 ≤ maxKB
+        var quality = 0.85;
+        var dataUrl;
+        (function tryCompress() {
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+          var sizeKB = Math.round(dataUrl.length * 3 / 4 / 1024);
+          if (sizeKB <= maxKB || quality <= 0.3) {
+            resolve(dataUrl);
+          } else {
+            quality -= 0.1;
+            tryCompress();
+          }
+        })();
+      };
+      img.onerror = function() { reject(new Error('图片加载失败')); };
+      img.src = ev.target.result;
+    };
+    reader.onerror = function() { reject(new Error('文件读取失败')); };
+    reader.readAsDataURL(file);
+  });
 }
 
 function formatDate(d) {
