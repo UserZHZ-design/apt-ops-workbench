@@ -828,7 +828,8 @@ function renderBgmLive(data) {
     '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
         '<div><div style="font-weight:700;font-size:15px;">🔥 本周热门BGM/话题（去抖音搜）</div>' +
-        '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + ' · 点击名字直达抖音搜索</div></div>' +
+        '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + ' · 点击名字直达抖音搜索</div>' +
+        '<div style="font-size:11px;background:rgba(255,255,255,.22);padding:3px 10px;border-radius:10px;margin-top:6px;display:inline-block;">⚡ 动态更新 · 周一自动刷新 · 与下方"经典参考库"区别明显</div></div>' +
         '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
       '</div>' +
     '</div>' +
@@ -952,17 +953,31 @@ function renderBGM(container) {
 
   var allBGMs = topPlays.length + topUses.length + sfx.length;
   var html = '<div id="bgmLiveSection" style="margin-bottom:22px;"></div>' +
+    '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<div style="font-size:22px;line-height:1;">🔄</div>' +
+      '<div style="flex:1;min-width:200px;">' +
+        '<div style="font-weight:700;font-size:14px;color:#92400e;">上方"本周热门BGM/话题"区为动态更新</div>' +
+        '<div style="font-size:12px;color:#b45309;margin-top:2px;">每周一自动从抖音/小红书热榜抓取名字 · 点名字直达抖音搜索 · 数据来源 uapis.cn</div>' +
+      '</div>' +
+    '</div>' +
     '<div class="stats-row">' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-plays\')"><div class="stat-value">'+topPlays.length+'</div><div class="stat-label">🎵 播放量TOP</div></div>' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-uses\')"><div class="stat-value">'+topUses.length+'</div><div class="stat-label">📈 使用量TOP</div></div>' +
   '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-sfx\')"><div class="stat-value">'+sfx.length+'</div><div class="stat-label">🔊 热门音效</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">'+allBGMs+'</div><div class="stat-label">📦 总计</div></div>' +
-  '</div>';
+  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">'+allBGMs+'</div><div class="stat-label">📦 经典库总计</div></div>' +
+    '</div>' +
+    '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:var(--radius);padding:12px 16px;margin:18px 0 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<div style="font-size:22px;line-height:1;">📚</div>' +
+      '<div style="flex:1;min-width:200px;">' +
+        '<div style="font-weight:700;font-size:14px;color:#1e3a8a;">以下为 v4.0 沉淀的「经典 BGM 参考库」</div>' +
+        '<div style="font-size:12px;color:#1e40af;margin-top:2px;">40 首经过运营验证的高质量 BGM/音效 · 稳定可选 · <strong style="color:#dc2626;">不会随周更变化</strong> · 与上方动态区区别明显</div>' +
+      '</div>' +
+    '</div>';
 
-  html += '<div class="section-title" id="bgm-plays">🎧 本周播放量 TOP10</div><div class="card-grid">';
+  html += '<div class="section-title" id="bgm-plays">📚 经典 BGM · 播放量参考 TOP10（v4.0 沉淀）</div><div class="card-grid">';
   topPlays.forEach(function(b,i) {
     html += '<div class="content-card">'+
-      '<span class="card-tag tag-hot">🏆 #'+(i+1)+'</span>'+
+      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
       '<h3>'+b.title+'</h3>'+
       '<div class="card-meta"><span>🎭 '+b.mood+'</span><span>📹 '+b.scene+'</span><span>📊 '+b.plays+'</span></div>'+
       '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','抖音热歌榜')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+b.file+'</span></div>'+
@@ -970,10 +985,10 @@ function renderBGM(container) {
   });
   html += '</div>';
 
-  html += '<div class="section-title" id="bgm-uses">🎤 本周最多人使用 TOP10</div><div class="card-grid">';
+  html += '<div class="section-title" id="bgm-uses">📚 经典 BGM · 使用量参考 TOP10（v4.0 沉淀）</div><div class="card-grid">';
   topUses.forEach(function(b,i) {
     html += '<div class="content-card">'+
-      '<span class="card-tag tag-trend">📈 #'+(i+1)+'</span>'+
+      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
       '<h3>'+b.title+'</h3>'+
       '<div class="card-meta"><span>📊 '+b.uses+'</span><span>📈 '+b.trend+'</span></div>'+
       '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','抖音音乐库')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+b.file+'</span></div>'+
@@ -981,10 +996,10 @@ function renderBGM(container) {
   });
   html += '</div>';
 
-  html += '<div class="section-title" id="bgm-sfx">🗣️ 热门音效 20个</div><div class="card-grid">';
+  html += '<div class="section-title" id="bgm-sfx">📚 经典音效库 · 短视频常用（20个，v4.0 沉淀）</div><div class="card-grid">';
   sfx.forEach(function(s,i) {
     html += '<div class="content-card">'+
-      '<span class="card-tag tag-tip">🔊 #'+(i+1)+'</span>'+
+      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
       '<h3>'+s.name+'</h3>'+
       '<div class="card-meta"><span>🎤 '+s.source+'</span><span>🎬 '+s.scene+'</span></div>'+
       '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','音效来源')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+s.file+'</span></div>'+
