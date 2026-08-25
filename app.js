@@ -878,27 +878,27 @@ function renderBgmLive(data) {
       '<div style="padding:24px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">⚠️ 暂未生成 BGM/音效数据（AI 失败或未配置 Key），请稍后重试</div>';
     return;
   }
-  // 正常渲染
+  // 正常渲染 - 横向多列网格布局
   function renderRow(item, isSfx) {
     var searchKey = item.search_key || item.name || '';
     var searchUrl = 'https://www.douyin.com/search/' + encodeURIComponent(searchKey);
     var label1 = isSfx ? (item.source || '热门音效') : (item.mood || '热门BGM');
     var label2 = item.scene || '';
-    var hotTag = item.hot ? '<span style="display:inline-block;padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:8px;font-size:10px;margin-left:6px;">🔥 ' + escapeHtml(item.hot) + '</span>' : '';
-    return '<div class="content-card" style="display:flex;align-items:center;gap:10px;padding:12px 14px;">' +
-      '<div style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f43f5e,#f59e0b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;">' + (isSfx ? '🔊' : '🎵') + '</div>' +
-      '<div style="flex:1;min-width:0;">' +
-        '<div style="font-weight:700;font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(item.name || '未命名') + hotTag + '</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' +
-          '<span style="display:inline-block;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:8px;margin-right:5px;">' + escapeHtml(label1) + '</span>' +
-          (label2 ? '<span style="display:inline-block;padding:1px 7px;background:#e0e7ff;color:#3730a3;border-radius:8px;">' + escapeHtml(label2) + '</span>' : '') +
-        '</div>' +
+    var hotTag = item.hot ? '<span style="display:inline-block;padding:1px 6px;background:#fee2e2;color:#b91c1c;border-radius:6px;font-size:10px;margin-left:4px;vertical-align:middle;">🔥 ' + escapeHtml(item.hot) + '</span>' : '';
+    return '<div class="content-card" style="padding:10px 12px;gap:8px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<div style="flex-shrink:0;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f43f5e,#f59e0b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;">' + (isSfx ? '🔊' : '🎵') + '</div>' +
+        '<div style="flex:1;min-width:0;font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(item.name || '未命名') + hotTag + '</div>' +
       '</div>' +
-      '<a href="' + searchUrl + '" target="_blank" rel="noopener" style="flex-shrink:0;padding:6px 10px;background:#f43f5e;color:#fff;border-radius:14px;font-size:12px;text-decoration:none;white-space:nowrap;">🔍 抖音搜</a>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px;">' +
+        '<span style="display:inline-block;padding:1px 6px;background:#fef3c7;color:#92400e;border-radius:6px;">' + escapeHtml(label1) + '</span>' +
+        (label2 ? '<span style="display:inline-block;padding:1px 6px;background:#e0e7ff;color:#3730a3;border-radius:6px;">' + escapeHtml(label2) + '</span>' : '') +
+      '</div>' +
+      '<a href="' + searchUrl + '" target="_blank" rel="noopener" style="display:block;text-align:center;padding:5px 8px;background:#f43f5e;color:#fff;border-radius:10px;font-size:11px;text-decoration:none;">🔍 抖音搜</a>' +
     '</div>';
   }
-  var bgmHtml = bgmList.slice(0, 10).map(function(b) { return renderRow(b, false); }).join('');
-  var sfxHtml = sfxList.slice(0, 10).map(function(s) { return renderRow(s, true); }).join('');
+  var bgmHtml = bgmList.slice(0, 20).map(function(b) { return renderRow(b, false); }).join('');
+  var sfxHtml = sfxList.slice(0, 20).map(function(s) { return renderRow(s, true); }).join('');
   el.innerHTML =
     '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:14px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
@@ -907,12 +907,12 @@ function renderBgmLive(data) {
         '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
       '</div>' +
     '</div>' +
-    // BGM 区
+    // BGM 区 - 多列网格（auto-fill 自适应宽屏 2-3 列、窄屏 1 列）
     '<div class="section-title" id="bgm-plays">🎵 本周热门 BGM TOP' + bgmList.length + autoUpdateTag('bgm') + '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">' + bgmHtml + '</div>' +
-    // 音效区
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:20px;">' + bgmHtml + '</div>' +
+    // 音效区 - 多列网格
     '<div class="section-title" id="bgm-sfx">🔊 本周热门音效库 TOP' + sfxList.length + autoUpdateTag('bgm') + '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' + sfxHtml + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:14px;">' + sfxHtml + '</div>' +
     // 来源说明
     '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">🎯 BGM/音效由 AI 每周一根据当周热点推荐，点击「🔍 抖音搜」直接跳转搜索 · 名称真实可搜 · ' + (data.ai_stale ? '<span style="color:#dc2626;font-weight:700;">⚠️ 当前为缓存数据（非最新 AI 生成）</span>' : '') + '</p>';
 }
