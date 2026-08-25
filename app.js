@@ -638,7 +638,7 @@ async function fetchWeeklyLive() {
   ];
   var results = {};
   await Promise.all(plats.map(function(p) {
-    return fetch('https://uapis.cn/api/v1/mic/hotboard?type=' + p.api, { cache:'no-store' })
+    return fetch('https://uapis.cn/api/v1/misc/hotboard?type=' + p.api, { cache:'no-store', signal: AbortSignal.timeout(8000) })
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(j) {
         if (j && j.list) {
@@ -653,7 +653,7 @@ async function fetchWeeklyLive() {
             };
           });
         }
-      }).catch(function(){});
+      }).catch(function(e){ console.warn('[uapis ' + p.api + ']', e && e.message || e); });
   }));
   var names = [];
   ['douyin','rednote'].forEach(function(k) {
@@ -675,28 +675,45 @@ async function fetchWeeklyLive() {
 }
 
 async function fetchWeeklyData(forceLive) {
+  console.log('[周更数据] 开始拉取 forceLive=' + forceLive);
   if (!forceLive) {
     try {
       var res = await fetch(WEEKLY_JSON + '?t=' + Date.now(), { cache:'no-store' });
       if (res.ok) {
         var d = await res.json();
         if (d && d.hotspot) {
+          console.log('[周更数据] 仓库 latest.json: week=' + d.week + ', analysis=' + !!(d.analysis) + ', calendar=' + !!(d.calendar) + ', competitor=' + !!(d.competitor));
           // 仓库周更数据若已过期（进入新的一周），自动改用实时拉取，保证打开即最新
           if (d.week && d.week !== isoWeekLabel(new Date())) {
-            var ld0 = await fetchWeeklyLive();
-            if (ld0 && ld0.hotspot) { weeklyDataCache = ld0; saveWeeklyLocal(ld0); return ld0; }
+            try {
+              var ld0 = await fetchWeeklyLive();
+              if (ld0 && ld0.hotspot && Object.keys(ld0.hotspot).some(function(k){ return (ld0.hotspot[k]||[]).length > 0; })) {
+                // 实时热榜拉取成功，但保留仓库里的 AI 字段（analysis/calendar/competitor/learning）
+                ld0.analysis = d.analysis || null;
+                ld0.calendar = d.calendar || null;
+                ld0.competitor = d.competitor || null;
+                ld0.learning = d.learning || null;
+                ld0.ai_stale = true;
+                weeklyDataCache = ld0; saveWeeklyLocal(ld0); return ld0;
+              }
+            } catch(e0) { console.warn('[周更数据] 实时拉取失败，沿用仓库旧数据:', e0 && e0.message || e0); }
           }
           weeklyDataCache = d; saveWeeklyLocal(d); return d;
         }
-      }
-    } catch(e){}
+      } else { console.warn('[周更数据] 仓库 latest.json HTTP ' + res.status); }
+    } catch(e){ console.warn('[周更数据] 仓库 latest.json 拉取失败:', e && e.message || e); }
   }
   try {
     var ld = await fetchWeeklyLive();
-    if (ld && ld.hotspot) { weeklyDataCache = ld; saveWeeklyLocal(ld); return ld; }
-  } catch(e){}
+    if (ld && ld.hotspot) {
+      var localKeep = weeklyDataCache || loadWeeklyLocal();
+      if (localKeep) { ld.analysis = ld.analysis || localKeep.analysis || null; ld.calendar = ld.calendar || localKeep.calendar || null; ld.competitor = ld.competitor || localKeep.competitor || null; ld.learning = ld.learning || localKeep.learning || null; }
+      weeklyDataCache = ld; saveWeeklyLocal(ld); return ld;
+    }
+  } catch(e){ console.warn('[周更数据] 实时拉取失败:', e && e.message || e); }
   var local = loadWeeklyLocal();
-  if (local) { weeklyDataCache = local; return local; }
+  if (local) { local._source = 'stale_local'; weeklyDataCache = local; console.warn('[周更数据] 全部失败，回退 localStorage 旧数据'); return local; }
+  console.warn('[周更数据] 无任何可用数据');
   return null;
 }
 
@@ -706,6 +723,12 @@ async function fillHotspotLiveSection() {
   el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">📡 正在加载实时热榜...</div>';
   try {
     var data = weeklyDataCache || await fetchWeeklyData(false);
+    // 缓存里完全没有热榜数据时强制重新拉取一次（防止旧缓存损坏导致一直显示 0 条）
+    var hasData = data && data.hotspot && Object.keys(data.hotspot).some(function(k){ return (data.hotspot[k]||[]).length > 0; });
+    if (!hasData) {
+      console.warn('[HOTSPOT] 缓存无数据，强制实时重拉');
+      data = await fetchWeeklyData(true);
+    }
     if (!data || !data.hotspot) {
       el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">⚠️ 暂时无法加载实时热榜，请检查网络或稍后重试。</div>';
       return;
@@ -831,12 +854,24 @@ async function refreshWeekly(which) {
   showToast('📡 正在实时拉取最新热榜...');
   try {
     var data = await fetchWeeklyData(true);
-    if (!data) throw new Error('无数据');
+    if (!data || !data.hotspot) throw new Error('实时拉取无数据');
     if (which === 'hotspot') renderHotspotLive(data);
     else if (which === 'bgm') renderBgmLive(data);
     renderDeepseekStatusBanner(data);
     showToast('✅ 已刷新为最新数据');
   } catch(e) {
+    console.warn('[刷新失败]', e);
+    // 实时拉取失败时降级到仓库周更缓存，避免界面空白
+    try {
+      var fallback = await fetchWeeklyData(false);
+      if (fallback && fallback.hotspot) {
+        if (which === 'hotspot') renderHotspotLive(fallback);
+        else if (which === 'bgm') renderBgmLive(fallback);
+        renderDeepseekStatusBanner(fallback);
+        showToast('⚠️ 实时拉取失败，已降级显示周更数据（' + (e && e.message || '网络异常') + '）');
+        return;
+      }
+    } catch(e2) {}
     showToast('❌ 刷新失败：' + (e && e.message ? e.message : '网络异常'));
   }
 }
@@ -1123,10 +1158,10 @@ function renderAnalysis(container) {
 function renderScript(container) {
   var html = renderApiKeyBar() +
     '<div class="stats-row">' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-input\')"><div class="stat-value">3</div><div class="stat-label">✍️ 风格类型</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-presets\')"><div class="stat-value">12</div><div class="stat-label">📋 预设话题</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">∞</div><div class="stat-label">🤖 AI生成</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">0</div><div class="stat-label">📁 本周生成</div></div>' +
+  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-input\')"><div class="stat-value">∞</div><div class="stat-label">✍️ AI 自由生成</div></div>' +
+  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-calendar\')"><div class="stat-value">7</div><div class="stat-label">📅 本周选题</div></div>' +
+  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-hotspots\')"><div class="stat-value">12</div><div class="stat-label">🔥 今日热点</div></div>' +
+  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'script-input\')"><div class="stat-value">∞</div><div class="stat-label">🎭 风格自选</div></div>' +
   '</div>';
   html += '<div class="section-title" id="script-input">🤖 AI工具箱（免费 · 一键生成）</div>' +
     '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">选择AI工具 → 复制提示词 → 粘贴生成 → 复制回工作台</p>' +
@@ -1146,81 +1181,124 @@ function renderScript(container) {
     '</div>' +
     '<div id="generatedScripts"></div>';
 
-  html += '<div class="section-title" id="script-presets">📝 今日推荐脚本（模板参考版）</div>';
+  // v4.5: 一键基于今日热点生成（chips 由 renderHotspotChips 动态填充）
+  html += '<div class="section-title" id="script-hotspots">⚡ 一键基于今日热点生成</div>' +
+    '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">点击任意热点，AI 立即结合该热点 + 公寓卖点生成完整脚本（风格由 AI 根据话题自由选择）</p>' +
+    '<div id="hotspotChips" style="margin-bottom:8px;"></div>';
 
-  var scripts = [
-    {
-      style:'😈 反差吐槽型', title:'「在上海租房千万别找这5种房子！」（反向安利）',
-      hook:'"上海租房5个大坑，我替你们踩过了...第一条你绝对想不到"',
-      scenes:[
-        '镜头1(0-3s): 怼脸自拍，表情夸张皱眉 "在上海租房，这5种房子千万别租！"',
-        '镜头2(3-15s): 快速切换5个"踩坑"画面（实为反向展示公寓优点）→ 搭配翻白眼表情包特效',
-        '镜头3(15-25s): 切到公寓实拍：阳光洒进房间、健身房、地铁站标识 → "但如果是这样的，当我没说"',
-        '镜头4(25-30s): 结尾大字卡："你的租房踩过什么坑？评论区见" → 引导互动'
-      ],
-      bgm:'"不是你听我说"魔性人声 → 切轻快卡点音乐', duration:'30秒',
-      sources:[{url:'https://www.douyin.com/video/739300000001',label:'参考视频(抖音)'},{url:'https://www.xiaohongshu.com/explore/739300000002',label:'参考笔记(小红书)'}]
-    },
-    {
-      style:'🏠 场景生活型', title:'「毕业生在上海的第一个家，30平米够吗？」',
-      hook:'"毕业第7天，我在上海租到了月薪1/3以内的房子..."',
-      scenes:[
-        '镜头1(0-3s): 推开公寓门的背影，阳光从窗户洒进来 → 温柔BGM渐入',
-        '镜头2(3-12s): 一镜到底展示房间：厨房→客厅→卧室→窗外景色',
-        '镜头3(12-22s): 插入生活画面：做早餐、泡咖啡、在公区认识新邻居',
-        '镜头4(22-30s): 坐在窗边独白："原来一个人住，没那么可怕" → 画面渐变黑'
-      ],
-      bgm:'《落日与晚风》- 傅梦彤（治愈系人声）', duration:'30秒',
-      sources:[{url:'https://www.douyin.com/video/739300000003',label:'参考视频(抖音)'}]
-    },
-    {
-      style:'💛 故事走心型', title:'「沪漂第365天，我换了第3次家」',
-      hook:'"来上海一年，搬了3次家，这次终于不搬了..."',
-      scenes:[
-        '镜头1(0-3s): 空荡荡旧房间，拖行李箱离开的背影 → "这是我来上海的第365天"',
-        '镜头2(3-15s): 穿插之前2次搬家快切画面（狭小隔断间→合租冲突→搬家）',
-        '镜头3(15-25s): 切到现在公寓：宽敞房间、友好管家、楼下咖啡馆 → 放慢节奏',
-        '镜头4(25-35s): 面对镜头微笑："找到一个好房子，是沪漂人最大的安全感"',
-        '镜头5(35-38s): 结尾文字："你也在找家吗？私信我，帮你找到它"'
-      ],
-      bgm:'《在你的身边》- 盛哲（走心人声，00:05开始人声卡点）', duration:'38秒',
-      sources:[{url:'https://www.douyin.com/video/739300000004',label:'参考视频(抖音)'},{url:'https://www.xiaohongshu.com/explore/739300000005',label:'参考笔记(小红书)'}]
-    }
-  ];
-
-  scripts.forEach(function(s) {
-    html += '<div class="script-card">'+
-      '<div class="script-header"><h3>'+s.style+'：'+s.title+'</h3></div>'+
-      '<div class="script-body">'+
-        '<p><strong>🪝 前3秒钩子：</strong>'+s.hook+'</p>'+
-        '<div class="scene-label">📸 分镜描述</div>'+
-        '<p>'+s.scenes.join('<br>')+'</p>'+
-        '<p style="margin-top:10px;"><strong>🎵 BGM及卡点：</strong>'+s.bgm+'</p>'+
-        '<p><strong>⏱️ 时长预估：</strong>'+s.duration+'</p>'+
-        '<p style="margin-top:8px;"><strong>🖼️ 封面图描述：</strong>大字标题+博主半身照+房源亮点局部</p>'+
-        '<div class="source-links" style="margin-top:6px;">'+s.sources.map(function(src){return sourceLabel(src.url,src.label)}).join('')+'</div>'+
-      '</div></div>';
-  });
+  // v4.5: 本周推荐脚本（AI 生成·基于日历选题，卡片由 renderCalendarScripts 动态填充）
+  html += '<div class="section-title" id="script-calendar">📅 本周推荐脚本（AI 生成 · 基于日历选题）</div>' +
+    '<div id="calendarScripts"></div>';
 
   container.innerHTML = html;
+  renderHotspotChips();
+  renderCalendarScripts();
 }
 
 async function generateScripts() {
   var topic = document.getElementById('scriptTopic').value.trim();
   if (!topic) { showToast('请输入话题关键词'); return; }
   var btn = document.getElementById('scriptTopicBtn');
-  var container = document.getElementById('generatedScripts');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }
-  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">🤖 AI 正在为「'+escapeHtml(topic)+'」生成脚本...</div>';
-  var prompt = '你是上海长租公寓/保障性租赁住房新媒体运营专家。请为话题「'+topic+'」生成 3 条不同风格的抖音/小红书短视频脚本。\n\n每条脚本严格用以下格式（用 ===== 分隔不同的脚本）：\n\n===== 风格名 =====\n标题：XXX\n前3秒钩子：XXX\n分镜：\n1. 镜头1（0-3s）：画面+台词\n2. 镜头2（3-15s）：画面+台词\n3. 镜头3（15-30s）：画面+台词\nBGM及卡点：XXX\n时长预估：XXX秒\n封面建议：XXX\n\n要求：3 条风格分别为「😈反差吐槽型」「🏠场景生活型」「💛故事走心型」；自然植入公寓卖点（地铁口/民用水电/押一付一/拎包入住/健身房/社交公区），真实有网感不打硬广；分镜具体可执行。';
   try {
-    var text = await callDeepSeek(prompt, { maxTokens: 2500, temperature: 0.85 });
+    await _generateScriptForTopic(topic);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✍️ AI 生成'; }
+  }
+}
+
+// v4.5: 统一生成入口（热点 chips / 日历卡片 / 自定义话题共用）
+async function quickGenerate(topic) {
+  if (!topic) return;
+  var target = document.getElementById('script-input');
+  if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await _generateScriptForTopic(topic);
+}
+
+// v4.5: 核心生成逻辑 —— 风格由 AI 根据话题自由选择，注入本周爆款/日历上下文
+async function _generateScriptForTopic(topic) {
+  var container = document.getElementById('generatedScripts');
+  if (!container) return;
+
+  // 注入本周上下文：爆款拆解 + 选题日历（若有）
+  var weeklyContext = '';
+  var analysis = getAutoData('analysis');
+  if (analysis) {
+    var winners = (analysis.like_winners || []).slice(0, 3);
+    if (winners.length) {
+      weeklyContext += '\n【本周同类爆款参考】\n' + winners.map(function(w, i) {
+        return (i + 1) + '. ' + (w.title || '') + '（钩子：' + (w.hook || '无') + '）';
+      }).join('\n');
+    }
+  }
+  var calendar = getAutoData('calendar');
+  if (calendar && calendar.plans && calendar.plans.length) {
+    weeklyContext += '\n【本周账号选题日历（保持内容连贯）】\n' + calendar.plans.slice(0, 7).map(function(p) {
+      return '- ' + (p.day || '') + '：' + (p.title || '') + '（' + (p.type || '') + '）';
+    }).join('\n');
+  }
+
+  var prompt = '你是上海长租公寓/保障性租赁住房的新媒体运营专家，账号主打抖音+小红书。目标人群：上海应届毕业生、青年白领、情侣租客、沪漂打工人。当前季节背景：8月底换租季。\n\n' +
+    '请为话题「' + topic + '」生成 3 条短视频脚本。\n\n' +
+    '【风格要求】不要套固定模板！请你自己判断该话题最适合的 3 种不同风格（可从反差吐槽、场景生活、故事走心、干货攻略、沉浸探房、情侣剧情、热梗玩梗、数据盘点等方向自由选择或组合创新），并在每条脚本标注风格名。\n' +
+    '【公寓卖点池（自然植入 2-3 个，别全堆）】A 价格灵活：租金低于同地段、押一付一、民水民电、可短租；B 体验生活：拎包入住、精装修、健身房、社交公区、阳台；C 保障服务：地铁口步行可达、品牌公寓管家、24h安保、维修响应快。\n' +
+    '【硬性要求】真实有网感不打硬广；前3秒钩子必须强；分镜具体可执行（含画面、台词、字幕、运镜提示）；BGM 给出具体风格或参考曲；结合当前热梗更佳。' + weeklyContext + '\n\n' +
+    '每条脚本严格用以下格式（用 ===== 分隔不同的脚本）：\n\n===== 风格名 =====\n标题：XXX\n前3秒钩子：XXX\n分镜：\n1. 镜头1（0-3s）：画面+台词\n2. 镜头2（3-15s）：画面+台词\n3. 镜头3（15-30s）：画面+台词\nBGM及卡点：XXX\n时长预估：XXX秒\n封面建议：XXX';
+
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">🤖 AI 正在为「' + escapeHtml(topic) + '」生成脚本（风格自由发挥中）...</div>';
+  try {
+    var text = await callDeepSeek(prompt, { maxTokens: 2500, temperature: 0.9 });
     container.innerHTML = renderScriptsFromText(topic, text);
     showToast('✅ 脚本已生成');
   } catch(e) {
-    container.innerHTML = '<div style="padding:20px;color:#dc2626;">❌ 生成失败：'+escapeHtml(e.message)+'</div>';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✍️ AI 生成'; }
+    container.innerHTML = '<div style="padding:20px;color:#dc2626;">❌ 生成失败：' + escapeHtml(e.message) + '</div><p style="font-size:12px;color:var(--text-secondary);">提示：需在「脚本生成」模块顶部配置 DeepSeek API Key（免费注册）。也可复制下方提示词到豆包/Kimi 网页版手动生成。</p>';
+  }
+}
+
+// v4.5: 热点 chips 渲染（数据来自本周热榜缓存）
+function renderHotspotChips() {
+  var el = document.getElementById('hotspotChips');
+  if (!el) return;
+  var titles = [];
+  var hs = weeklyDataCache && weeklyDataCache.hotspot;
+  if (hs) {
+    ['douyin', 'rednote', 'weibo', 'zhihu'].forEach(function(k) {
+      (hs[k] || []).forEach(function(it) { if (it && it.title) titles.push(it.title); });
+    });
+  }
+  var seen = {}; var list = [];
+  titles.forEach(function(t) { if (!seen[t]) { seen[t] = 1; list.push(t); } });
+  list = list.slice(0, 12);
+  if (!list.length) {
+    el.innerHTML = '<div style="padding:14px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">📡 热点数据尚未加载，请稍候或到「热梗捕手」模块点「🔄 立即刷新」。</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(t) {
+    var safe = escapeHtml(t).replace(/"/g, '&quot;');
+    return '<button onclick="quickGenerate(this.dataset.t)" data-t="' + safe + '" style="display:inline-block;padding:8px 14px;margin:5px 6px 0 0;background:linear-gradient(135deg,#ff6a3d,#ff3d81);color:#fff;border:none;border-radius:20px;font-size:13px;cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;">🔥 ' + escapeHtml(t) + '</button>';
+  }).join('') + '<p style="font-size:11px;color:var(--text-muted);margin-top:10px;">数据来源：uapis.cn 实时热榜（抖音/小红书/微博/知乎去重前12）</p>';
+}
+
+// v4.5: 本周推荐脚本卡片（读 AI 选题日历）
+function renderCalendarScripts() {
+  var el = document.getElementById('calendarScripts');
+  if (!el) return;
+  var cd = getAutoData('calendar');
+  if (cd && cd.plans && cd.plans.length) {
+    var html = '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">选题来自「选题日历」模块的 AI 周更数据，点击卡片按钮即可展开为完整脚本' + autoUpdateTag('calendar') + '</p>';
+    cd.plans.forEach(function(p) {
+      var topic = (p.title || '').replace(/^[「『]|[」』]$/g, '');
+      var safe = escapeHtml(topic).replace(/"/g, '&quot;');
+      html += '<div class="content-card" style="margin-bottom:12px;">' +
+        '<h3>' + escapeHtml(p.day || '') + '：' + escapeHtml(p.title || '') + '</h3>' +
+        '<div class="card-meta"><span>📹 ' + escapeHtml(p.type || '') + '</span><span>👥 ' + escapeHtml(p.audience || '') + '</span><span>🎵 ' + escapeHtml(p.bgm || '') + '</span><span>⏰ ' + escapeHtml(p.time || '') + '</span></div>' +
+        '<p>📝 ' + escapeHtml(p.summary || '') + '</p>' +
+        '<button onclick="quickGenerate(this.dataset.t)" data-t="' + safe + '" style="margin-top:10px;padding:8px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🤖 AI 展开为完整脚本</button>' +
+        '</div>';
+    });
+    el.innerHTML = html;
+  } else {
+    el.innerHTML = '<div style="padding:18px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);">📅 本周 AI 选题日历数据尚未就绪（每周一 9 点自动更新）。可先在上方输入自定义话题，或点击「⚡ 今日热点」直接生成。</div>';
   }
 }
 
@@ -2204,7 +2282,8 @@ function renderCompetitor(container) {
 function renderMaterial(container) {
   var weekArchives = [
     {
-      week: 31, dateRange: '7/28 - 8/3', label: '本周',
+      week: 31, dateRange: '7/28 - 8/3', label: '📌示例',
+      _sample: true,
       categories: [
         {
           id: 'captions', name: '🔥 热梗文案存档', type: 'text',
@@ -2391,6 +2470,110 @@ function renderMaterial(container) {
     },
   ];
 
+  // v4.5.1: 从 weeklyDataCache 动态生成本周（实时）条目，插入到最前
+  var liveWeek = null;
+  try {
+    var wd = (typeof weeklyDataCache !== 'undefined') ? weeklyDataCache : null;
+    if (wd && wd.week && wd.week_label) {
+      var wkNum = 0;
+      var m = String(wd.week).match(/(\d+)/);
+      if (m) wkNum = parseInt(m[1], 10);
+      var today = new Date();
+      var curISOWeek = (function(){
+        var d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+        var dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      })();
+      var wkNumFinal = wkNum || curISOWeek;
+
+      var liveFiles = { hotspot: [], calendar: [], analysis: [], competitor: [], bgm: [] };
+      if (wd.hotspot) {
+        ['douyin','rednote','weibo','zhihu'].forEach(function(k){
+          (wd.hotspot[k] || []).slice(0, 10).forEach(function(it){
+            if (it && it.title) liveFiles.hotspot.push({ name: '[' + k + '] ' + it.title, date: (wd.generated_at || '').slice(0, 10) || '', content: it.title + (it.url ? '\n链接: ' + it.url : '') });
+          });
+        });
+      }
+      if (wd.calendar && wd.calendar.plans) {
+        wd.calendar.plans.forEach(function(p){
+          liveFiles.calendar.push({ name: (p.day || '') + '_' + (p.title || '选题'), date: (wd.generated_at || '').slice(0, 10) || '', content: '【' + (p.type || '') + '】' + (p.title || '') + '\n人群: ' + (p.audience || '') + '\nBGM: ' + (p.bgm || '') + '\n时间: ' + (p.time || '') + '\n' + (p.summary || '') });
+        });
+      }
+      if (wd.analysis) {
+        (wd.analysis.like_winners || []).slice(0, 5).forEach(function(w){
+          liveFiles.analysis.push({ name: '赞' + (w.likes || '') + '_' + (w.title || ''), date: (wd.generated_at || '').slice(0, 10) || '', content: '【前3秒钩子】' + (w.hook || '') + '\n【内容结构】' + (w.structure || '') + '\n【爆款原因】' + (w.reason || '') + '\n【BGM】' + (w.bgm || '') });
+        });
+        (wd.analysis.view_winners || []).slice(0, 5).forEach(function(w){
+          liveFiles.analysis.push({ name: '播' + (w.plays || '') + '_' + (w.title || ''), date: (wd.generated_at || '').slice(0, 10) || '', content: '【前3秒钩子】' + (w.hook || '') + '\n【内容结构】' + (w.structure || '') + '\n【爆款原因】' + (w.reason || '') + '\n【BGM】' + (w.bgm || '') });
+        });
+      }
+      if (wd.competitor && wd.competitor.length) {
+        wd.competitor.forEach(function(c){
+          liveFiles.competitor.push({ name: c.name || c.account || '竞品', date: (wd.generated_at || '').slice(0, 10) || '', content: (c.strategy || c.summary || JSON.stringify(c)) });
+        });
+      }
+      if (wd.bgm && wd.bgm.names && wd.bgm.names.length) {
+        wd.bgm.names.slice(0, 20).forEach(function(nm){
+          liveFiles.bgm.push({ name: nm, date: (wd.generated_at || '').slice(0, 10) || '', content: '热门BGM/话题：' + nm + '\n搜索：https://www.douyin.com/search/' + encodeURIComponent(nm) });
+        });
+      }
+
+      liveWeek = {
+        week: wkNumFinal,
+        dateRange: wd.week_label || '',
+        label: '本周（实时）',
+        isLive: true,
+        categories: [
+          { id: 'hotspot', name: '🔥 本周热榜（AI 实时）', type: 'text', files: liveFiles.hotspot },
+          { id: 'calendar', name: '📅 本周选题日历（AI 周一更新）', type: 'text', files: liveFiles.calendar },
+          { id: 'analysis', name: '🏆 本周爆款拆解（AI 周一更新）', type: 'text', files: liveFiles.analysis },
+          { id: 'competitor', name: '👁️ 本周竞品监控（AI 周一更新）', type: 'text', files: liveFiles.competitor },
+          { id: 'bgm', name: '🎵 本周热门BGM（实时）', type: 'text', files: liveFiles.bgm }
+        ]
+      };
+      liveWeek.categories = liveWeek.categories.filter(function(c){ return c.files && c.files.length > 0; });
+      if (liveWeek.categories.length === 0) liveWeek = null;
+    }
+  } catch(e) { console.warn('[renderMaterial] 动态本周生成失败:', e); }
+
+  // v4.5.1: 从 localStorage 读取已归档的历史周（按周倒序，最多保留 4 个）
+  var archivedWeeks = [];
+  try {
+    var raw = localStorage.getItem('apt_v4_archives');
+    if (raw) {
+      var arr = JSON.parse(raw);
+      if (arr && arr.length) {
+        arr.forEach(function(snap) {
+          if (snap.week === (liveWeek && liveWeek.week)) return; // 同周不重复
+          var wkNum2 = 0; var m2 = String(snap.week || '').match(/(\d+)/);
+          if (m2) wkNum2 = parseInt(m2[1], 10);
+          var af = { hotspot: [], calendar: [], analysis: [], competitor: [], bgm: [] };
+          if (snap.hotspot) { ['douyin','rednote','weibo','zhihu'].forEach(function(k){ (snap.hotspot[k]||[]).slice(0,5).forEach(function(it){ if (it && it.title) af.hotspot.push({ name: '[' + k + '] ' + it.title, date: (snap.generated_at||'').slice(0,10)||'', content: it.title }); }); }); }
+          if (snap.calendar && snap.calendar.plans) { snap.calendar.plans.forEach(function(p){ af.calendar.push({ name: (p.day||'')+'_'+(p.title||'选题'), date: (snap.generated_at||'').slice(0,10)||'', content: (p.title||'')+'\n'+(p.summary||'') }); }); }
+          if (snap.analysis) { (snap.analysis.like_winners||[]).forEach(function(w){ af.analysis.push({ name: '赞'+(w.likes||'')+'_'+(w.title||''), date: (snap.generated_at||'').slice(0,10)||'', content: '【钩子】'+(w.hook||'')+'\n【结构】'+(w.structure||'') }); }); }
+          if (snap.competitor && snap.competitor.length) { snap.competitor.forEach(function(c){ af.competitor.push({ name: c.name||c.account||'竞品', date: (snap.generated_at||'').slice(0,10)||'', content: (c.strategy||c.summary||'') }); }); }
+          if (snap.bgm && snap.bgm.names) { snap.bgm.names.slice(0,10).forEach(function(nm){ af.bgm.push({ name: nm, date: (snap.generated_at||'').slice(0,10)||'', content: 'BGM：'+nm }); }); }
+          var cats = [
+            { id:'hotspot', name:'🔥 历史热榜', type:'text', files:af.hotspot },
+            { id:'calendar', name:'📅 历史选题', type:'text', files:af.calendar },
+            { id:'analysis', name:'🏆 历史爆款', type:'text', files:af.analysis },
+            { id:'competitor', name:'👁️ 历史竞品', type:'text', files:af.competitor },
+            { id:'bgm', name:'🎵 历史BGM', type:'text', files:af.bgm }
+          ].filter(function(c){ return c.files.length > 0; });
+          if (cats.length > 0) {
+            archivedWeeks.push({ week: wkNum2, dateRange: snap.week_label || '', label: '已归档', _archivedAt: snap._archivedAt, categories: cats });
+          }
+        });
+      }
+    }
+  } catch(e) { console.warn('[renderMaterial] 读归档失败:', e); }
+
+  // 合并：liveWeek（实时） + 归档周 + 硬编码示例
+  if (liveWeek) weekArchives.unshift(liveWeek);
+  archivedWeeks.forEach(function(aw) { weekArchives.push(aw); });
+
   var mediaIcons = { audio: '\ud83c\udfb5', doc: '\ud83d\udcc4', xls: '\ud83d\udcca', video: '\ud83c\udfac', image: '\ud83d\uddbc\ufe0f', pdf: '\ud83d\udcd5', zip: '\ud83d\udce6' };
 
   var activeWeek = 0;
@@ -2405,6 +2588,14 @@ function renderMaterial(container) {
     '<div class="stat-card" style="cursor:pointer"><div class="stat-value">4</div><div class="stat-label">\ud83c\udfa7 文字分类</div></div>' +
     '<div class="stat-card" style="cursor:pointer"><div class="stat-value">3</div><div class="stat-label">\ud83c\udf99\ufe0f 媒体分类</div></div>' +
     '</div>';
+  // v4.5.1: 顶部归档说明 + 归档当前周按钮
+  html += '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<div style="flex:1;min-width:240px;">' +
+      '<div style="font-weight:600;font-size:14px;color:#92400e;">\ud83d\udce6 自动归档说明</div>' +
+      '<div style="font-size:12px;color:#92400e;margin-top:4px;line-height:1.5;">页面已自动加载本周（实时）AI 数据卡片；下方 4 周为 v4.0 上线时的示例数据。点「\ud83d\udce6 归档当前周」可将本周 AI 数据快照保存到本地（localStorage），下次打开自动显示在顶部。</div>' +
+    '</div>' +
+    '<button onclick="archiveCurrentWeek()" style="padding:10px 18px;background:#f59e0b;color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">\ud83d\udce6 归档当前周</button>' +
+  '</div>';
 
   html += '<div class="section-title" id="mat-folders">\ud83d\udce6 按周归档素材云盘</div>' +
     '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">\ud83d\udcd6 每周自动归档所有模块数据 \u00b7 文字类可点击查看内容并复制 \u00b7 媒体类可查看文件信息</p>' +
@@ -2477,6 +2668,31 @@ function simulateUpload() {
 
 function simulateDownload(filename) {
   showToast('\u2b07\ufe0f ' + filename + ' \u5df2\u52a0\u5165\u4e0b\u8f7d\u961f\u5217\uff08\u6a21\u62df\uff09');
+}
+
+// v4.5.1: 归档当前周（把 weeklyDataCache 快照到 localStorage）
+function archiveCurrentWeek() {
+  if (!weeklyDataCache || !weeklyDataCache.week) {
+    showToast('\u274c \u5f53\u524d\u5468\u6570\u636e\u5c1a\u672a\u52a0\u8f7d\uff0c\u8bf7\u5148\u5230\u201c\u70ed\u6897\u6355\u624b\u201d\u6a21\u5757\u70b9\u201c\u5373\u5237\u65b0\u201d');
+    return;
+  }
+  try {
+    var key = 'apt_v4_archives';
+    var raw = localStorage.getItem(key);
+    var arr = raw ? JSON.parse(raw) : [];
+    // 同 week 覆盖
+    var wkKey = weeklyDataCache.week;
+    var exists = arr.findIndex(function(x){ return x.week === wkKey; });
+    var snap = JSON.parse(JSON.stringify(weeklyDataCache));
+    snap._archivedAt = new Date().toISOString();
+    if (exists >= 0) arr[exists] = snap; else arr.unshift(snap);
+    // 保留最近 12 周
+    if (arr.length > 12) arr = arr.slice(0, 12);
+    localStorage.setItem(key, JSON.stringify(arr));
+    showToast('\u2705 \u5df2\u5f52\u6863\u300a' + wkKey + '\u300b\uff0c\u4e0b\u6b21\u6253\u5f00\u9876\u90e8\u81ea\u52a8\u663e\u793a\uff08\u4fdd\u5b58 ' + arr.length + ' \u5468\uff09');
+  } catch(e) {
+    showToast('\u274c \u5f52\u6863\u5931\u8d25\uff1a' + e.message);
+  }
 }
 
 // ===== INIT =====
