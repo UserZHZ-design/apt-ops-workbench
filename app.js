@@ -473,11 +473,33 @@ function renderHotspot(container) {
     '<div id=\"hotspotAISection\" style=\"margin-bottom:22px;\"></div>' +
     '<div id=\"hotspotLiveSection\" style=\"margin-bottom:22px;\"></div>';
 
-  // 可参考创意（与本周热梗同区展示，不再折叠）
-  var refItems = hotspots.filter(function(h){return h.cat==='ref'});
+  // 可参考创意：优先读 AI 周更数据，无数据时降级到硬编码示例
+  var refItems = [];
+  var aiRefIdeas = getAutoData('ref_ideas');
+  if (aiRefIdeas && aiRefIdeas.ideas && aiRefIdeas.ideas.length) {
+    refItems = aiRefIdeas.ideas.map(function(it) {
+      return {
+        title: it.title || '',
+        tag: it.tag || '👀 可参考创意',
+        tagClass: it.tagClass || 'tag-idea',
+        platform: it.platform || '小红书',
+        exposure: it.exposure || '',
+        tip: it.tip || '',
+        captions: it.captions || [],
+        sources: it.sources || [{url:'https://www.xiaohongshu.com/explore',label:'小红书参考'},{url:'https://www.douyin.com/',label:'抖音参考'}]
+      };
+    });
+  } else {
+    // AI 数据缺失时回退到 v4.0 硬编码示例（5 个 ref）
+    refItems = hotspots.filter(function(h){return h.cat==='ref'});
+  }
   if (refItems.length > 0) {
-    html += '<div class="section-title" style="margin-top:22px;">👀 可参考创意（经典角度，可借鉴思路二次创作）</div>';
-    html += '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">以下创意角度好，可借鉴思路进行二次创作，与本周热梗同区展示方便随时取用</p>';
+    var refHeaderTag = aiRefIdeas ? '👀 可参考创意（AI周更 · 经典角度）' : '👀 可参考创意（v4.0 示例 · 待 AI 更新）';
+    var refHeaderDesc = aiRefIdeas
+      ? '以下经典角度由 AI 每周一自动生成，可借鉴思路进行二次创作'
+      : '当前显示 v4.0 硬编码示例，AI 周更后自动替换（每周一 9 点更新）';
+    html += '<div class="section-title" style="margin-top:22px;">' + refHeaderTag + autoUpdateTag('ref_ideas') + '</div>';
+    html += '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">' + refHeaderDesc + '</p>';
     html += '<div class="card-grid">';
     refItems.forEach(function(h, i) {
       var capId = 'cap-ref-'+i;
@@ -486,8 +508,10 @@ function renderHotspot(container) {
         capHtml = '<button class="expand-btn" onclick="toggleExpand(\''+capId+'\')">📝 查看可使用文案 ('+h.captions.length+')</button>';
         capHtml += '<div class="expandable" id="'+capId+'">';
         h.captions.forEach(function(c) {
-          var encodedText = encodeURIComponent(c.text).replace(/'/g, '%27').replace(/"/g, '%22');
-          capHtml += '<div class="caption-box"><div class="cap-label">'+c.label+'</div><div class="cap-text">'+c.text+'</div><span class="cap-copy" data-copy="'+encodedText+'">📋 复制文案</span></div>';
+          var capText = (typeof c === 'string') ? c : (c.text || '');
+          var capLabel = (typeof c === 'string') ? ('文案 ' + (i+1)) : (c.label || '文案');
+          var encodedText = encodeURIComponent(capText).replace(/'/g, '%27').replace(/"/g, '%22');
+          capHtml += '<div class="caption-box"><div class="cap-label">'+capLabel+'</div><div class="cap-text">'+capText+'</div><span class="cap-copy" data-copy="'+encodedText+'">📋 复制文案</span></div>';
         });
         capHtml += '</div>';
       }
@@ -748,17 +772,23 @@ function renderHotspotLive(data) {
     '</a>';
   }).join('');
   var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
+  var totalCount = Object.keys(data.hotspot || {}).reduce(function(sum, k) { return sum + (data.hotspot[k] || []).length; }, 0);
   el.innerHTML =
-    '<div style="background:linear-gradient(135deg,#0ea5e9,#4D6BFE);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+    '<details style="margin-bottom:18px;">' +
+      '<summary style="cursor:pointer;padding:14px 18px;background:linear-gradient(135deg,#0ea5e9,#4D6BFE);border-radius:var(--radius);color:#fff;list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;user-select:none;">' +
         '<div><div style="font-weight:700;font-size:15px;">📡 实时热榜 · 免费API自动更新</div>' +
-        '<div style="font-size:12px;opacity:.85;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + escapeHtml(data.week_label || '') + ' · ' + liveTag + '</div></div>' +
-        '<button onclick="refreshWeekly(\'hotspot\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+        '<div style="font-size:12px;opacity:.85;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + escapeHtml(data.week_label || '') + ' · ' + liveTag + ' · 共 ' + totalCount + ' 条</div></div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<span style="font-size:12px;background:rgba(255,255,255,.2);padding:3px 10px;border-radius:10px;">▶ 点击展开</span>' +
+          '<button onclick="event.stopPropagation();refreshWeekly(\'hotspot\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+        '</div>' +
+      '</summary>' +
+      '<div style="padding-top:12px;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' + tabs + '</div>' +
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">' + (items || '<div style="padding:16px;color:var(--text-muted);font-size:13px;">该平台暂无数据</div>') + '</div>' +
+        '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">数据来源 uapis.cn 免费接口 · GitHub Action 每周一9点自动刷新，也可点「立即刷新」实时拉取（需联网）</p>' +
       '</div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' + tabs + '</div>' +
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">' + (items || '<div style="padding:16px;color:var(--text-muted);font-size:13px;">该平台暂无数据</div>') + '</div>' +
-    '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">数据来源 uapis.cn 免费接口 · GitHub Action 每周一9点自动刷新，也可点「立即刷新」实时拉取（需联网）</p>';
+    '</details>';
 }
 
 function setHotspotTab(k) {
