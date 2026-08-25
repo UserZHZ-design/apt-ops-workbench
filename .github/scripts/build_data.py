@@ -491,7 +491,7 @@ def generate_bgm_list(hot_topics_text, today):
 }
 
 要求：
-- list 恰好 10 条，sfx_list 恰好 10 条
+- list 恰好 20 条，sfx_list 恰好 20 条
 - BGM 必须是真实存在的歌曲（可参考热歌榜、抖音神曲榜、网易云飙升榜），不要编造歌名
 - name 格式：「《歌名》- 歌手」便于搜索
 - mood + scene 都要有具体信息，不是空泛标签
@@ -508,7 +508,7 @@ def generate_bgm_list(hot_topics_text, today):
 目标人群：上海应届毕业生、青年白领、情侣租客、上海打工人
 卖点组合：A(地铁口+民用水电+押一付一) / B(拎包入住+健身房+社交公区) / C(租金便宜+采光好+可短租)
 
-请推荐 10 个本周热门 BGM + 10 个本周热门音效。""" % (hot_topics_text, week, season)
+请推荐 20 个本周热门 BGM + 20 个本周热门音效。""" % (hot_topics_text, week, season)
     text = call_deepseek(system, user)
     if not text:
         return None
