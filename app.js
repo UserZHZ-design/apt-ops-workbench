@@ -851,20 +851,71 @@ function renderBgmLive(data) {
   var el = document.getElementById('bgmLiveSection');
   if (!el) return;
   var liveTag = data.live ? '🔴 实时' : '🗓️ 周更';
-  var chips = data.bgm.names.slice(0, 40).map(function(nm) {
-    return '<a href="https://www.douyin.com/search/' + encodeURIComponent(nm) + '" target="_blank" rel="noopener" style="display:inline-block;padding:8px 14px;margin:5px 5px 0 0;background:var(--card);border:1px solid var(--border);border-radius:20px;font-size:13px;color:var(--text);text-decoration:none;">🔍 ' + escapeHtml(nm) + '</a>';
-  }).join('');
+  var bgmList = (data.bgm && data.bgm.list) || [];
+  var sfxList = (data.bgm && data.bgm.sfx_list) || [];
+  // 旧数据兼容：从旧的 names 数组（话题名）降级显示
+  if (bgmList.length === 0 && data.bgm && data.bgm.names && data.bgm.names.length) {
+    // 旧格式只有 names（话题名），提示用户刷新
+    el.innerHTML =
+      '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+          '<div><div style="font-weight:700;font-size:15px;">🎵 本周热门 BGM · 音效库</div>' +
+          '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + '</div></div>' +
+          '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:24px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">⚠️ 当前缓存的 BGM 数据为旧版（话题名），点「立即刷新」加载 AI 生成的真实 BGM/音效库</div>';
+    return;
+  }
+  if (bgmList.length === 0 && sfxList.length === 0) {
+    el.innerHTML =
+      '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+          '<div><div style="font-weight:700;font-size:15px;">🎵 本周热门 BGM · 音效库</div>' +
+          '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + '</div></div>' +
+          '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:24px;background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);text-align:center;font-size:13px;color:var(--text-secondary);">⚠️ 暂未生成 BGM/音效数据（AI 失败或未配置 Key），请稍后重试</div>';
+    return;
+  }
+  // 正常渲染
+  function renderRow(item, isSfx) {
+    var searchKey = item.search_key || item.name || '';
+    var searchUrl = 'https://www.douyin.com/search/' + encodeURIComponent(searchKey);
+    var label1 = isSfx ? (item.source || '热门音效') : (item.mood || '热门BGM');
+    var label2 = item.scene || '';
+    var hotTag = item.hot ? '<span style="display:inline-block;padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:8px;font-size:10px;margin-left:6px;">🔥 ' + escapeHtml(item.hot) + '</span>' : '';
+    return '<div class="content-card" style="display:flex;align-items:center;gap:10px;padding:12px 14px;">' +
+      '<div style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f43f5e,#f59e0b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;">' + (isSfx ? '🔊' : '🎵') + '</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:700;font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(item.name || '未命名') + hotTag + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' +
+          '<span style="display:inline-block;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:8px;margin-right:5px;">' + escapeHtml(label1) + '</span>' +
+          (label2 ? '<span style="display:inline-block;padding:1px 7px;background:#e0e7ff;color:#3730a3;border-radius:8px;">' + escapeHtml(label2) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<a href="' + searchUrl + '" target="_blank" rel="noopener" style="flex-shrink:0;padding:6px 10px;background:#f43f5e;color:#fff;border-radius:14px;font-size:12px;text-decoration:none;white-space:nowrap;">🔍 抖音搜</a>' +
+    '</div>';
+  }
+  var bgmHtml = bgmList.slice(0, 10).map(function(b) { return renderRow(b, false); }).join('');
+  var sfxHtml = sfxList.slice(0, 10).map(function(s) { return renderRow(s, true); }).join('');
   el.innerHTML =
-    '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:12px;">' +
+    '<div style="background:linear-gradient(135deg,#f43f5e,#f59e0b);border-radius:var(--radius);padding:14px 18px;color:#fff;margin-bottom:14px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-        '<div><div style="font-weight:700;font-size:15px;">🔥 本周热门BGM/话题（去抖音搜）</div>' +
-        '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + ' · 点击名字直达抖音搜索</div>' +
-        '<div style="font-size:11px;background:rgba(255,255,255,.22);padding:3px 10px;border-radius:10px;margin-top:6px;display:inline-block;">⚡ 动态更新 · 周一自动刷新 · 与下方"经典参考库"区别明显</div></div>' +
+        '<div><div style="font-weight:700;font-size:15px;">🎵 本周热门 BGM · 音效库</div>' +
+        '<div style="font-size:12px;opacity:.9;margin-top:2px;">' + escapeHtml(data.week || '') + ' · ' + liveTag + ' · 共 ' + bgmList.length + ' 首 BGM + ' + sfxList.length + ' 个音效</div></div>' +
         '<button onclick="refreshWeekly(\'bgm\')" style="padding:6px 14px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;">🔄 立即刷新</button>' +
       '</div>' +
     '</div>' +
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' + chips + '</div>' +
-    '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">名单取自本周抖音/小红书热门话题，抓取「名字」供你到抖音平台搜索对应BGM/话题，数据来源 uapis.cn</p>';
+    // BGM 区
+    '<div class="section-title" id="bgm-plays">🎵 本周热门 BGM TOP' + bgmList.length + autoUpdateTag('bgm') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">' + bgmHtml + '</div>' +
+    // 音效区
+    '<div class="section-title" id="bgm-sfx">🔊 本周热门音效库 TOP' + sfxList.length + autoUpdateTag('bgm') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' + sfxHtml + '</div>' +
+    // 来源说明
+    '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">🎯 BGM/音效由 AI 每周一根据当周热点推荐，点击「🔍 抖音搜」直接跳转搜索 · 名称真实可搜 · ' + (data.ai_stale ? '<span style="color:#dc2626;font-weight:700;">⚠️ 当前为缓存数据（非最新 AI 生成）</span>' : '') + '</p>';
 }
 
 async function refreshWeekly(which) {
@@ -932,123 +983,9 @@ function dismissDsBanner() {
 
 // ===== 2. BGM RENDERER =====
 function renderBGM(container) {
-  var topPlays = [
-    {title:'《落日与晚风》- 傅梦彤', mood:'治愈/氛围', scene:'社区生活、房源展示', plays:'4.2亿次播放', uses:'458万使用', file:'落日与晚风_傅梦彤.wav'},
-    {title:'《在你的身边》- 盛哲', mood:'走心/励志', scene:'租客故事、情侣看房', plays:'3.8亿次播放', uses:'392万使用', file:'在你的身边_盛哲.wav'},
-    {title:'《小城夏天》Remix', mood:'节奏卡点', scene:'房源快剪、公寓活动', plays:'3.1亿次播放', uses:'315万使用', file:'小城夏天_Remix.wav'},
-    {title:'《起风了》纯音乐版', mood:'氛围/治愈', scene:'社区生活、阳台露台', plays:'2.7亿次播放', uses:'268万使用', file:'起风了_纯音乐.wav'},
-    {title:'《向云端》- 小霞', mood:'治愈/轻柔', scene:'阳台、露台、公区', plays:'2.4亿次播放', uses:'231万使用', file:'向云端_小霞.wav'},
-    {title:'《悬溺》- 葛东琪', mood:'节奏/张力', scene:'价格攻略、快剪', plays:'2.1亿次播放', uses:'198万使用', file:'悬溺_葛东琪.wav'},
-    {title:'《我记得》- 赵雷', mood:'情感/回忆', scene:'长租故事、搬家', plays:'1.9亿次播放', uses:'176万使用', file:'我记得_赵雷.wav'},
-    {title:'《错位时空》- 艾辰', mood:'走心/对比', scene:'租房前后对比', plays:'1.7亿次播放', uses:'155万使用', file:'错位时空_艾辰.wav'},
-    {title:'《星空》- 郭顶', mood:'氛围/宁静', scene:'夜景、独居生活', plays:'1.5亿次播放', uses:'132万使用', file:'星空_郭顶.wav'},
-    {title:'《平凡的一天》- 毛不易', mood:'治愈/日常', scene:'社区日常vlog', plays:'1.3亿次播放', uses:'118万使用', file:'平凡的一天_毛不易.wav'}
-  ];
-
-  var topUses = [
-    {title:'《落日与晚风》- 傅梦彤', uses:'458万次使用', trend:'↑12%', file:'落日与晚风_傅梦彤.wav'},
-    {title:'《在你的身边》- 盛哲', uses:'392万次使用', trend:'↑8%', file:'在你的身边_盛哲.wav'},
-    {title:'《小城夏天》Remix', uses:'315万次使用', trend:'↑15%', file:'小城夏天_Remix.wav'},
-    {title:'"不是你听我说"魔性人声', uses:'287万次使用', trend:'↑22%', file:'不是你听我说_魔性人声.wav'},
-    {title:'《悬溺》- 葛东琪', uses:'198万次使用', trend:'↑6%', file:'悬溺_葛东琪.wav'},
-    {title:'《甄嬛传》"臣妾做不到啊"', uses:'185万次使用', trend:'↑9%', file:'甄嬛传_臣妾做不到.wav'},
-    {title:'《向云端》- 小霞', uses:'231万次使用', trend:'↑5%', file:'向云端_小霞.wav'},
-    {title:'《起风了》纯音乐版', uses:'268万次使用', trend:'↑3%', file:'起风了_纯音乐.wav'},
-    {title:'《错位时空》- 艾辰', uses:'155万次使用', trend:'↑7%', file:'错位时空_艾辰.wav'},
-    {title:'《我记得》- 赵雷', uses:'176万次使用', trend:'↑4%', file:'我记得_赵雷.wav'}
-  ];
-
-  var sfx = [
-    {name:'"不是你听我说"魔性人声',source:'抖音网红',scene:'反差吐槽开场',file:'不是你听我说_音效.wav'},
-    {name:'《甄嬛传》"臣妾做不到啊"',source:'影视台词',scene:'租房心酸系列',file:'臣妾做不到_音效.wav'},
-    {name:'"我裂开了"崩溃人声',source:'网络热梗',scene:'踩坑吐槽',file:'我裂开了_音效.wav'},
-    {name:'"这就是快乐星球"卡点',source:'经典BGM',scene:'房源快剪卡点',file:'快乐星球_卡点.wav'},
-    {name:'"好日子"喜庆开头',source:'经典歌曲',scene:'搬入新居',file:'好日子_开头.wav'},
-    {name:'"啊这"尴尬音效',source:'网络热梗',scene:'反转尴尬',file:'啊这_尴尬音效.wav'},
-    {name:'"芜湖起飞"加速人声',source:'游戏梗',scene:'看房快剪',file:'芜湖起飞_音效.wav'},
-    {name:'"优雅永不过时"配音',source:'网络梗',scene:'高级感房源展示',file:'优雅永不过时_配音.wav'},
-    {name:'"他急了他急了"魔性',source:'网络梗',scene:'砍价场景',file:'他急了_魔性.wav'},
-    {name:'"格局小了"人声卡点',source:'网络梗',scene:'格局打开反转',file:'格局小了_卡点.wav'},
-    {name:'"直接一步到位"口播',source:'短视频常用',scene:'推荐公寓',file:'一步到位_口播.wav'},
-    {name:'"好好好"连续点头',source:'网络梗',scene:'满意看房',file:'好好好_点头.wav'},
-    {name:'"泰裤辣"魔性人声',source:'网络梗',scene:'惊艳房源',file:'泰裤辣_音效.wav'},
-    {name:'"栓Q"无奈人声',source:'网络梗',scene:'踩坑无奈',file:'栓Q_无奈.wav'},
-    {name:'"大无语事件"配音',source:'网络梗',scene:'奇葩经历',file:'大无语_配音.wav'},
-    {name:'"尊嘟假嘟"可爱人声',source:'网络梗',scene:'惊喜看房',file:'尊嘟假嘟_可爱.wav'},
-    {name:'"哈基米"萌系BGM',source:'网络梗',scene:'宠物友好公寓',file:'哈基米_萌系.wav'},
-    {name:'"city不city"潮流卡点',source:'网络梗',scene:'城市生活展示',file:'city不city_卡点.wav'},
-    {name:'"DNA动了"热血音效',source:'网络梗',scene:'回忆杀对比',file:'DNA动了_热血.wav'},
-    {name:'"命运的齿轮开始转动"',source:'网络梗',scene:'入住转折',file:'命运齿轮_转动.wav'}
-  ];
-
-  var allBGMs = topPlays.length + topUses.length + sfx.length;
-  var html = '<div id="bgmLiveSection" style="margin-bottom:22px;"></div>' +
-    '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-      '<div style="font-size:22px;line-height:1;">🔄</div>' +
-      '<div style="flex:1;min-width:200px;">' +
-        '<div style="font-weight:700;font-size:14px;color:#92400e;">上方"本周热门BGM/话题"区为动态更新</div>' +
-        '<div style="font-size:12px;color:#b45309;margin-top:2px;">每周一自动从抖音/小红书热榜抓取名字 · 点名字直达抖音搜索 · 数据来源 uapis.cn</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="stats-row">' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-plays\')"><div class="stat-value">'+topPlays.length+'</div><div class="stat-label">🎵 播放量TOP</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-uses\')"><div class="stat-value">'+topUses.length+'</div><div class="stat-label">📈 使用量TOP</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'bgm-sfx\')"><div class="stat-value">'+sfx.length+'</div><div class="stat-label">🔊 热门音效</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">'+allBGMs+'</div><div class="stat-label">📦 经典库总计</div></div>' +
-    '</div>' +
-    '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:var(--radius);padding:12px 16px;margin:18px 0 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-      '<div style="font-size:22px;line-height:1;">📚</div>' +
-      '<div style="flex:1;min-width:200px;">' +
-        '<div style="font-weight:700;font-size:14px;color:#1e3a8a;">以下为 v4.0 沉淀的「经典 BGM 参考库」</div>' +
-        '<div style="font-size:12px;color:#1e40af;margin-top:2px;">40 首经过运营验证的高质量 BGM/音效 · 稳定可选 · <strong style="color:#dc2626;">不会随周更变化</strong> · 与上方动态区区别明显</div>' +
-      '</div>' +
-    '</div>';
-
-  html += '<div class="section-title" id="bgm-plays">📚 经典 BGM · 播放量参考 TOP10（v4.0 沉淀）</div><div class="card-grid">';
-  topPlays.forEach(function(b,i) {
-    html += '<div class="content-card">'+
-      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
-      '<h3>'+b.title+'</h3>'+
-      '<div class="card-meta"><span>🎭 '+b.mood+'</span><span>📹 '+b.scene+'</span><span>📊 '+b.plays+'</span></div>'+
-      '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','抖音热歌榜')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+b.file+'</span></div>'+
-    '</div>';
-  });
-  html += '</div>';
-
-  html += '<div class="section-title" id="bgm-uses">📚 经典 BGM · 使用量参考 TOP10（v4.0 沉淀）</div><div class="card-grid">';
-  topUses.forEach(function(b,i) {
-    html += '<div class="content-card">'+
-      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
-      '<h3>'+b.title+'</h3>'+
-      '<div class="card-meta"><span>📊 '+b.uses+'</span><span>📈 '+b.trend+'</span></div>'+
-      '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','抖音音乐库')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+b.file+'</span></div>'+
-    '</div>';
-  });
-  html += '</div>';
-
-  html += '<div class="section-title" id="bgm-sfx">📚 经典音效库 · 短视频常用（20个，v4.0 沉淀）</div><div class="card-grid">';
-  sfx.forEach(function(s,i) {
-    html += '<div class="content-card">'+
-      '<span class="card-tag" style="background:#dbeafe;color:#1e3a8a;">📌 经典 #'+(i+1)+'</span>'+
-      '<h3>'+s.name+'</h3>'+
-      '<div class="card-meta"><span>🎤 '+s.source+'</span><span>🎬 '+s.scene+'</span></div>'+
-      '<div class="source-links">'+sourceLabel('https://www.douyin.com/music','音效来源')+'<span style="font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;">📁 '+s.file+'</span></div>'+
-    '</div>';
-  });
-  html += '</div>';
-
-  html += '<div class="section-title">🔗 免费音乐资源</div>' +
-    '<div class="source-links" style="background:var(--card);padding:14px 18px;border-radius:var(--radius);flex-wrap:wrap;">' +
-    sourceLink('https://music.163.com/','网易云音乐热歌榜') +
-    sourceLink('https://y.qq.com/','QQ音乐排行榜') +
-    sourceLink('https://www.douyin.com/music','抖音热歌榜') +
-    sourceLink('https://www.xiaohongshu.com/explore','小红书配乐') +
-    '</div>'+
-    '<div style="margin-top:16px;padding:14px 18px;background:#eef2ff;border-radius:var(--radius);border:1px solid #c7d2fe;">'+
-    '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">����️ 如何手动更新BGM？</div>'+
-    '<p style="font-size:12px;color:var(--text-secondary);">打开上方音乐平台 → 查看排行榜 → 选择适合视频风格的BGM → 在剪辑时使用。本模块展示的是示例推荐，可手动替换。</p>'+
-    '</div>';
-  container.innerHTML = html;
+  // v4.5.5 重构：BGM/音效库全部由 renderBgmLive 渲染（读 latest.json 的 bgm.list + bgm.sfx_list）
+  // 此函数只输出容器 + 触发 fillBgmLiveSection（保持向后兼容，调用方不变）
+  container.innerHTML = '<div id="bgmLiveSection" style="margin-bottom:22px;"></div>';
   fillBgmLiveSection();
 }
 
