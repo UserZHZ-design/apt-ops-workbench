@@ -404,6 +404,64 @@ def generate_competitor(hot_topics_text, today):
     return parse_json_from_text(text)
 
 
+def generate_ref_ideas(hot_topics_text, today):
+    """可参考创意：5 个经典创意角度（与本周热梗同区展示，每条含可复制文案）"""
+    week = iso_week_label(today)
+    season = season_context(today)
+    system = """你是长租公寓新媒体内容策划专家，精通抖音+小红书双平台运营。
+目标人群：上海应届毕业生、青年白领、情侣租客、上海打工人。
+卖点组合参考：A(地铁口+民用水电+押一付一) / B(拎包入住+健身房+社交公区) / C(租金便宜+采光好+可短租)
+
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "ideas": [
+    {
+      "title": "创意话题标题（带#话题标签，6-15字）",
+      "platform": "抖音 或 小红书",
+      "exposure": "预估曝光量（带单位，如'8200万浏览'或'1.2亿播放'）",
+      "tip": "创作要点（2-3句话，说明这个角度为什么好、如何借势、可搭配的视觉/情绪/互动）",
+      "captions": [
+        {"label": "文案1 · xxx版", "text": "完整文案1（30-80字，含emoji和2-3个#话题）"},
+        {"label": "文案2 · xxx版", "text": "完整文案2（30-80字，含emoji和2-3个#话题）"}
+      ]
+    }
+  ]
+}
+
+要求：
+- ideas 恰好 5 条，每条都是「经典角度」（不追求当周热度，而是经久不衰的内容模板）
+- 角度必须多样化：覆盖测评对比、情感共鸣、攻略干货、故事走心、互动投票、改造展示等多种方向
+- 每条 captions 必须是 2 条不同风格的完整文案（反差/走心/干货/互动/幽默等不同风格）
+- exposure 字段填合理预估（参考近期同类型内容），不要固定数字
+- title 必须是 # 话题标签格式（如 #MBTI选房指南）
+- 借势当前热点话题（如有），融合季节/人群/卖点"""
+    user = """本周热门话题（用于借势参考）：
+%s
+
+当前：%s
+季节背景：%s
+
+请生成 5 个「经典角度 + 可直接使用」的可参考创意。""" % (hot_topics_text, week, season)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    data = parse_json_from_text(text)
+    if not data or not isinstance(data.get("ideas"), list) or len(data["ideas"]) == 0:
+        return None
+    # 补全每个 idea 的元信息（前端卡片渲染需要的字段）
+    for it in data["ideas"]:
+        if "tag" not in it:
+            it["tag"] = "👀 可参考创意"
+        if "tagClass" not in it:
+            it["tagClass"] = "tag-idea"
+        if "sources" not in it or not it["sources"]:
+            it["sources"] = [
+                {"url": "https://www.xiaohongshu.com/explore", "label": "小红书参考"},
+                {"url": "https://www.douyin.com/", "label": "抖音参考"}
+            ]
+    return data
+
+
 def generate_learning(today):
     """学习计划：月度学习目标和今日打卡目标"""
     m = today.month
@@ -501,6 +559,7 @@ def build():
     calendar_data = None
     competitor_data = None
     learning_data = None
+    ref_ideas_data = None
 
     has_key = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
 
@@ -528,6 +587,10 @@ def build():
             competitor_data = generate_competitor(hot_topics_text, today)
             print("  -> %s" % ("成功" if competitor_data else "跳过(空)"))
 
+            print("[3/4] AI生成: 可参考创意（5个经典角度）...")
+            ref_ideas_data = generate_ref_ideas(hot_topics_text, today)
+            print("  -> %s" % ("成功" if ref_ideas_data else "跳过(空)"))
+
             if is_monthly_first:
                 print("[4/4] AI生成: 学习计划（月度更新）...")
                 learning_data = generate_learning(today)
@@ -550,6 +613,8 @@ def build():
         competitor_data = old_data["competitor"]; ai_stale = True
     if learning_data is None and old_data and old_data.get("learning"):
         learning_data = old_data["learning"]; ai_stale = True
+    if ref_ideas_data is None and old_data and old_data.get("ref_ideas"):
+        ref_ideas_data = old_data["ref_ideas"]; ai_stale = True
 
     # 构建 DeepSeek 状态，供前端提示「余额不足 / Key无效」等
     now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -587,6 +652,8 @@ def build():
         payload["competitor"] = competitor_data
     if learning_data:
         payload["learning"] = learning_data
+    if ref_ideas_data:
+        payload["ref_ideas"] = ref_ideas_data
 
     # ═══ Step 6: 写入文件 ═══
     os.makedirs("data", exist_ok=True)
