@@ -1389,106 +1389,135 @@ function copyPrompt(idx) {
 // ===== 5. DATA DASHBOARD =====
 function renderData(container) {
   var analyses = getDataAnalyses();
-  var latest = analyses.length > 0 ? analyses[0] : null;
-  var totalVideos = latest ? latest.videos.length : 0;
-  var avgCompletion = latest && latest.summary ? (latest.summary.avgCompletion || 0) + '%' : '--';
-  var lastDate = latest ? latest.date : '--';
+  var html = '';
 
-  var html = '<div class="stats-row">' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'data-import\')"><div class="stat-value">' + (totalVideos || 0) + '</div><div class="stat-label">🎬 本周视频</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'data-history\')"><div class="stat-value">' + analyses.length + '</div><div class="stat-label">📊 分析次数</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">' + avgCompletion + '</div><div class="stat-label">📈 平均完播率</div></div>' +
-  '<div class="stat-card" style="cursor:pointer"><div class="stat-value">' + lastDate + '</div><div class="stat-label">📅 上次分析</div></div>' +
-  '</div>';
-
-  // 数据导入区
-  html += '<div class="section-title" id="data-import">📥 上传账号截图 · AI 自动分析</div>' +
+  // ===== 1. 小红书账号分析向导（重点） =====
+  html += '<div class="section-title" id="data-import">🎯 小红书账号分析</div>' +
     '<div class="content-card">' +
-    '<p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">💡 输入账号昵称/ID + 上传账号主页或后台数据截图，DeepSeek Vision AI 帮你识别作品列表和关键指标，并生成优化建议。</p>' +
-    // 账号名输入 + 平台 + 时间
-    '<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">' +
-      '<input type="text" id="dataAccountName" placeholder="📱 账号昵称/ID（如：上海租房日记）" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
-      '<select id="dataPeriod" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
-        '<option value="近一周">近一周（7天）</option><option value="近两周">近两周（14天）</option><option value="近一月">近一月（30天）</option>' +
-      '</select>' +
-    '</div>' +
-    '<div class="data-platform-tabs" style="display:flex;gap:8px;margin-bottom:12px;">' +
-      '<button class="data-pbtn active" data-dp="douyin" onclick="selectDataPlatform(\'douyin\')">🎵 抖音</button>' +
-      '<button class="data-pbtn" data-dp="xhs" onclick="selectDataPlatform(\'xhs\')">📕 小红书</button>' +
-      '<button class="data-pbtn" data-dp="wx" onclick="selectDataPlatform(\'wx\')">📹 视频号</button>' +
-    '</div>' +
-    // 截图上传
-    '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 上传账号主页或后台数据截图（DeepSeek AI 自动识别）</span></div>' +
-    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-      '<button class="btn-upload-img" onclick="document.getElementById(\'dataFileInput\').click()">📷 选择截图</button>' +
-      '<span id="dataFileName" style="font-size:12px;color:var(--text-muted);">未选择图片</span>' +
-      '<input type="file" id="dataFileInput" accept="image/*" style="display:none;" onchange="handleDataImage(event)" />' +
-    '</div>' +
-    '<div id="dataImagePreview" style="display:none;margin-top:12px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">' +
-      '<img id="dataPreviewImg" src="" alt="预览" style="width:100%;max-height:300px;object-fit:contain;display:block;background:#f9fafb;" />' +
-    '</div>' +
-    // 可选：文字补充
-    '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 可选：手动补充数据或问题（提高分析准确度）</span></div>' +
-    '<textarea id="dataRawInput" placeholder="例如：账号是上海某长租公寓官方号，主推民用水电+押一付一的卖点..." style="width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
-    '<p style="margin-top:12px;font-size:12px;color:var(--text-muted);">💡 需要先在热梗捕手模块配置 DeepSeek API Key 才能启用 AI 视觉分析</p>' +
-    '<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">' +
-      '<button class="btn-ai" onclick="requestAIAnalysis()">🤖 DeepSeek AI 分析账号</button>' +
-    '</div>' +
+      '<p style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);">三步完成账号体检：<strong>输入账号 → 上传截图 → AI 拆解爆款 + 优化建议</strong></p>' +
+      '<div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">' +
+        '<select id="dataPlatformSel" onchange="selectDataPlatform(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
+          '<option value="xhs" selected>📕 小红书（重点）</option>' +
+          '<option value="douyin">🎵 抖音</option>' +
+          '<option value="wx">📹 视频号</option>' +
+        '</select>' +
+        '<input type="text" id="dataAccountName" placeholder="📱 小红书账号昵称 / ID（如：上海租房日记）" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />' +
+        '<select id="dataPeriod" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--card);">' +
+          '<option value="近7天">近 7 天</option><option value="近30天" selected>近 30 天</option><option value="全部">全部笔记</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">📷 上传截图：账号主页 或 笔记数据页（AI 自动识别）</span></div>' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<button class="btn-upload-img" onclick="document.getElementById(\'dataFileInput\').click()">📷 选择截图</button>' +
+        '<span id="dataFileName" style="font-size:12px;color:var(--text-muted);">未选择图片（可上传主页/笔记列表/数据中心截图）</span>' +
+        '<input type="file" id="dataFileInput" accept="image/*" style="display:none;" onchange="handleDataImage(event)" />' +
+      '</div>' +
+      '<div id="dataImagePreview" style="display:none;margin-top:12px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">' +
+        '<img id="dataPreviewImg" src="" alt="预览" style="width:100%;max-height:300px;object-fit:contain;display:block;background:#f9fafb;" />' +
+      '</div>' +
+      '<div style="margin:12px 0 8px;"><span style="font-size:12px;font-weight:600;color:var(--text-secondary);">✏️ 补充说明（可选 · 提高分析针对性）</span></div>' +
+      '<textarea id="dataRawInput" placeholder="例如：账号主打上海保租房，主推民用水电+押一付一；最近发的几篇数据下滑，想知道问题出在哪..." style="width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit;outline:none;"></textarea>' +
+      '<p style="margin-top:10px;font-size:12px;color:var(--text-muted);">💡 需要在上方 API Key 栏选择「智谱 GLM-4V」并配置 Key（支持图片识别）</p>' +
+      '<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">' +
+        '<button class="btn-ai" onclick="requestAIAnalysis()">🤖 AI 分析这个账号</button>' +
+      '</div>' +
     '</div>';
 
-  // 最新分析结果
-  if (latest) {
-    html += renderAnalysisResult(latest);
+  html += '<div id="dataResultSection"></div>';
+  if (analyses.length > 0) {
+    html += renderXhsResult(analyses[0], true);
   }
 
-  // 历史分析记录
-  html += '<div class="section-title" id="data-history">📋 历史分析记录</div>';
-  html += renderDataHistoryList(analyses);
-
-  // 数据导出教程
-  html += '<div class="section-title" id="data-guide">📖 如何从各平台导出数据</div>' +
+  html += '<div class="section-title" style="margin-top:22px;">📚 小红书运营参考（租房赛道）</div>' +
     '<div class="card-grid">' +
     '<div class="content-card">' +
-      '<span class="card-tag tag-trend">🎵 抖音</span>' +
-      '<h3>抖音创作者服务中心</h3>' +
-      '<p>1. 打开 <strong>creator.douyin.com</strong></p>' +
-      '<p>2. 进入「内容管理」→「视频数据」或「作品数据」</p>' +
-      '<p>3. 选择日期范围，点击「下载表格」或截图</p>' +
-      '<p>4. 关键指标：播放量、完播率、2秒跳出率、点赞、评论、分享</p>' +
+      '<span class="card-tag tag-trend">⏰ 发布时间</span>' +
+      '<h3>最佳发布时段</h3>' +
+      '<p>• 工作日：12:00-13:00 / 18:00-19:00 / 21:00-22:00</p>' +
+      '<p>• 周末：10:00-11:00 / 15:00-16:00 / 20:00-21:00</p>' +
+      '<p>• 租房内容：<strong>18:00-20:00</strong>（下班找房高峰）</p>' +
     '</div>' +
     '<div class="content-card">' +
-      '<span class="card-tag tag-fire">📕 小红书</span>' +
-      '<h3>小红书创作中心</h3>' +
-      '<p>1. 打开 <strong>creator.xiaohongshu.com</strong></p>' +
-      '<p>2. 进入「数据中心」→「笔记数据」</p>' +
-      '<p>3. 选择时间范围，导出或截图</p>' +
-      '<p>4. 关键指标：阅读、点赞、收藏、评论、完播率</p>' +
+      '<span class="card-tag tag-fire">📱 笔记类型</span>' +
+      '<h3>图文 vs 视频</h3>' +
+      '<p>• 图文：避坑指南、租金对比、房间清单（信息密度高）</p>' +
+      '<p>• 视频：看房vlog、改造过程、入住体验（沉浸感强）</p>' +
+      '<p>• 封面：<strong>大字 + 实拍图</strong>，3 秒看懂价值</p>' +
     '</div>' +
     '<div class="content-card">' +
-      '<span class="card-tag tag-new">📹 视频号</span>' +
-      '<h3>视频号创作者助手</h3>' +
-      '<p>1. 微信搜索「视频号助手」小程序或网页版</p>' +
-      '<p>2. 进入「数据中心」→「作品数据」</p>' +
-      '<p>3. 选择日期范围，导出或截图</p>' +
-      '<p>4. 关键指标：播放量、完播率、2秒跳出率、互动数据</p>' +
+      '<span class="card-tag tag-idea">#️⃣ 标签策略</span>' +
+      '<h3>话题标签公式</h3>' +
+      '<p>• 1 大词（#上海租房）+ 1 场景（#毕业生租房）+ 1 卖点（#押一付一）</p>' +
+      '<p>• 共 5-8 个：大词 1 + 中词 2-3 + 精准词 2-4</p>' +
+      '<p>• 避免 #上热门 等无效营销词</p>' +
     '</div>' +
     '</div>';
 
-  // 分析维度说明
-  html += '<div class="section-title">🔬 AI分析维度说明</div>' +
-    '<div class="content-card">' +
-    '<p><strong>📊 播放量分析：</strong>识别高/低播放视频，分析标题、封面、发布时间等关联因素</p>' +
-    '<p><strong>🎯 完播率分析：</strong>评估内容吸引力，前3秒钩子 effectiveness，视频节奏把控</p>' +
-    '<p><strong>⚡ 2秒跳出率分析：</strong>判断开头是否足够抓人，封面与内容一致性</p>' +
-    '<p><strong>💬 互动量分析：</strong>点赞/评论/分享/收藏比例，识别高互动内容特征</p>' +
-    '<p><strong>📈 趋势对比：</strong>与上周/上月数据对比，发现增长或下滑信号</p>' +
-    '<p><strong>💡 优化建议：</strong>针对每条视频给出具体的改进方向和下周执行策略</p>' +
-    '</div>';
+  html += '<div class="section-title" id="data-history">📁 历史分析记录</div>';
+  html += renderDataHistoryList(analyses);
 
   container.innerHTML = html;
 }
 
-var dataPlatform = 'douyin';
+// v4.6: 小红书专版分析结果渲染（结构化）
+function renderXhsResult(a, isLatest) {
+  var s = a.summary || {};
+  var v = a.videos || [];
+  var pn = { xhs: '📕 小红书', douyin: '🎵 抖音', wx: '📹 视频号' };
+  var html = '<div class="section-title" id="data-result">' + (isLatest ? '📋 最新分析结果' : '📋 分析详情') +
+    '<span style="font-size:12px;color:var(--text-muted);font-weight:400;"> ' + (a.date || '') + ' · ' + (pn[a.platform] || a.platformName || '小红书') + ' · ' + (a.periodRange || '') + '</span></div>';
+
+  html += '<div class="content-card" style="margin-bottom:14px;">' +
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ff2442,#ff7a45);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📕</div>' +
+      '<div style="flex:1;min-width:200px;">' +
+        '<div style="font-weight:700;font-size:16px;">' + escapeHtml(a.accountName || '未识别账号') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + (a.accountId ? 'ID: ' + escapeHtml(a.accountId) + ' · ' : '') + '统计区间 ' + escapeHtml(a.periodRange || a.period || '') + '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  function fmtN(n) {
+    n = n || 0;
+    return n >= 10000 ? (n / 10000).toFixed(1) + '万' : n.toLocaleString();
+  }
+  html += '<div class="stats-row">' +
+    '<div class="stat-card"><div class="stat-value">' + (s.totalNotes || v.length || 0) + '</div><div class="stat-label">📝 笔记数</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + fmtN(s.totalLikes) + '</div><div class="stat-label">❤️ 总点赞</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + fmtN(s.totalFavorites) + '</div><div class="stat-label">⭐ 总收藏</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + fmtN(s.avgLikes) + '</div><div class="stat-label">📊 平均赞</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (s.interactionRate !== undefined && s.interactionRate !== '' ? s.interactionRate + '%' : '--') + '</div><div class="stat-label">💬 互动率</div></div>' +
+  '</div>';
+
+  if (v && v.length) {
+    html += '<div class="section-title" style="margin-top:18px;">📝 笔记表现</div>' +
+      '<div class="data-table"><table><thead><tr><th>标题</th><th>类型</th><th>日期</th><th>❤️赞</th><th>⭐藏</th><th>💬评</th><th>↗️转</th></tr></thead><tbody>';
+    v.forEach(function(note) {
+      html += '<tr>' +
+        '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(note.title || '') + '">' + escapeHtml(note.title || '未命名') + '</td>' +
+        '<td>' + escapeHtml(note.type || (note.is_video ? '视频' : '图文')) + '</td>' +
+        '<td>' + escapeHtml(note.time || note.date || '-') + '</td>' +
+        '<td>' + fmtN(note.likes) + '</td>' +
+        '<td>' + fmtN(note.favorites) + '</td>' +
+        '<td>' + fmtN(note.comments) + '</td>' +
+        '<td>' + fmtN(note.shares) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  if (a.aiAnalysis) {
+    html += '<div class="content-card" style="margin-top:16px;"><span class="card-tag tag-fire">🏆 AI 深度分析</span><p style="white-space:pre-line;">' + a.aiAnalysis + '</p></div>';
+  }
+  if (a.aiSuggestions && a.aiSuggestions.length) {
+    html += '<div class="content-card"><span class="card-tag tag-tip">💡 下周行动建议</span>';
+    a.aiSuggestions.forEach(function(sg) {
+      html += '<p>• ' + sg + '</p>';
+    });
+    html += '</div>';
+  }
+  return html;
+}
+
 function selectDataPlatform(p) {
   dataPlatform = p;
   document.querySelectorAll('.data-pbtn').forEach(function(b){ b.classList.remove('active'); });
@@ -1671,13 +1700,14 @@ function requestAIAnalysis() {
 function callZhipuVision(apiKey, accountName, platform, imageDataUrl, extraText) {
   var platformNames = { douyin: '抖音', xhs: '小红书', wx: '视频号' };
   var platformName = platformNames[platform] || platform;
-  var promptText = '你是长租公寓新媒体运营专家，擅长基于截图分析账号表现。\n\n' +
-    '请分析这张「' + (accountName || '未命名') + '」' + platformName + '账号的截图，识别出：\n' +
-    '1. 账号昵称和 ID\n' +
-    '2. 近一周（最近 7 天）的作品列表：标题、播放量、点赞数、评论数、收藏数、分享数、发布时间\n' +
-    '3. 关键指标：总作品数、总播放、平均播放、平均点赞、平均评论、互动率\n' +
-    '4. TOP3 爆款 + 失败案例\n' +
-    '5. 整体趋势判断 + 优化建议（至少 5 条具体可执行的建议）\n\n' +
+  var promptText = '你是小红书租房赛道运营专家，擅长基于账号截图做深度诊断。\n\n' +
+    '请分析「' + (accountName || '未命名') + '」' + platformName + '账号截图，重点识别小红书指标：\n' +
+    '1. 账号信息：昵称、小红书号/ID、粉丝数、获赞与收藏数（如可见）\n' +
+    '2. 笔记列表（重点）：每篇标题、类型（图文/视频）、发布日期、点赞、收藏、评论、转发\n' +
+    '3. 关键指标：笔记数、总点赞、总收藏、平均点赞、平均收藏、互动率（赞+藏+评/曝光）、收藏率\n' +
+    '4. 爆款诊断：TOP3 爆款笔记（为什么爆：标题/封面/选题/发布时间）\n' +
+    '5. 低数据分析：数据差的笔记（问题出在哪：标题无信息量/封面不吸引/选题小众/发布时间差）\n' +
+    '6. 整体趋势 + 至少 5 条可执行的下周优化建议（标题公式/封面/话题标签/发布时间/选题方向）\n\n' +
     (extraText ? '用户额外补充说明：' + extraText + '\n\n' : '') +
     '请严格以 JSON 格式返回，结构如下：\n' +
     '{\n' +
@@ -1754,13 +1784,14 @@ function callZhipuVision(apiKey, accountName, platform, imageDataUrl, extraText)
 function callDeepSeekVision(apiKey, accountName, platform, imageDataUrl, extraText) {
   var platformNames = { douyin: '抖音', xhs: '小红书', wx: '视频号' };
   var platformName = platformNames[platform] || platform;
-  var promptText = '你是长租公寓新媒体运营专家，擅长基于截图分析账号表现。\n\n' +
-    '请分析这张「' + (accountName || '未命名') + '」' + platformName + '账号的截图，识别出：\n' +
-    '1. 账号昵称和 ID\n' +
-    '2. 近一周（最近 7 天）的作品列表：标题、播放量、点赞数、评论数、收藏数、分享数、发布时间\n' +
-    '3. 关键指标：总作品数、总播放、平均播放、平均点赞、平均评论、互动率\n' +
-    '4. TOP3 爆款 + 失败案例\n' +
-    '5. 整体趋势判断 + 优化建议（至少 5 条具体可执行的建议）\n\n' +
+  var promptText = '你是小红书租房赛道运营专家，擅长基于账号截图做深度诊断。\n\n' +
+    '请分析「' + (accountName || '未命名') + '」' + platformName + '账号截图，重点识别小红书指标：\n' +
+    '1. 账号信息：昵称、小红书号/ID、粉丝数、获赞与收藏数（如可见）\n' +
+    '2. 笔记列表（重点）：每篇标题、类型（图文/视频）、发布日期、点赞、收藏、评论、转发\n' +
+    '3. 关键指标：笔记数、总点赞、总收藏、平均点赞、平均收藏、互动率（赞+藏+评/曝光）、收藏率\n' +
+    '4. 爆款诊断：TOP3 爆款笔记（为什么爆：标题/封面/选题/发布时间）\n' +
+    '5. 低数据分析：数据差的笔记（问题出在哪：标题无信息量/封面不吸引/选题小众/发布时间差）\n' +
+    '6. 整体趋势 + 至少 5 条可执行的下周优化建议（标题公式/封面/话题标签/发布时间/选题方向）\n\n' +
     (extraText ? '用户额外补充说明：' + extraText + '\n\n' : '') +
     '请严格以 JSON 格式返回，结构如下：\n' +
     '{\n' +
