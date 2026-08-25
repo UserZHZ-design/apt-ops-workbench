@@ -462,6 +462,77 @@ def generate_ref_ideas(hot_topics_text, today):
     return data
 
 
+def generate_bgm_list(hot_topics_text, today):
+    """本周热门 BGM + 音效库：AI 推荐 10 个真实 BGM + 10 个真实音效（含场景）"""
+    week = iso_week_label(today)
+    season = season_context(today)
+    system = """你是长租公寓短视频内容策划 + 抖音音乐推荐专家。
+你的任务：根据本周热点趋势，推荐真实存在于抖音/网易云/QQ音乐平台的 BGM 和音效。
+
+请严格以 JSON 格式输出，不要包含任何其他文字。JSON 结构如下：
+{
+  "list": [
+    {
+      "name": "《歌名》- 歌手名（必须真实存在的歌曲，必须包含歌手或艺术家名）",
+      "mood": "氛围/情绪标签（治愈/节奏/走心/卡点/搞笑 等）",
+      "scene": "适用场景（房源快剪/租客故事/情侣看房/价格攻略/搬入新居 等）",
+      "hot": "热度/趋势（如'本周抖音+128%'/'热歌榜TOP3'）",
+      "search_key": "抖音搜索关键词（建议格式：歌名+空格+歌手，便于精准定位）"
+    }
+  ],
+  "sfx_list": [
+    {
+      "name": "音效名（如《甄嬛传》"臣妾做不到啊"、"好日子"喜庆开头）",
+      "source": "来源（抖音网红/影视台词/网络热梗/经典BGM/游戏梗）",
+      "scene": "使用场景（反差吐槽开场/租房心酸系列/踩坑吐槽/房源快剪卡点 等）",
+      "search_key": "抖音搜索关键词"
+    }
+  ]
+}
+
+要求：
+- list 恰好 10 条，sfx_list 恰好 10 条
+- BGM 必须是真实存在的歌曲（可参考热歌榜、抖音神曲榜、网易云飙升榜），不要编造歌名
+- name 格式：「《歌名》- 歌手」便于搜索
+- mood + scene 都要有具体信息，不是空泛标签
+- search_key 必须是抖音搜索能精准定位的关键词组合
+- BGM 风格需多样化：治愈/节奏/卡点/走心/搞笑/氛围/复古/魔性/纯音乐 都要覆盖
+- 音效需匹配长租公寓短视频常见场景：踩坑吐槽/房源快剪/反差对比/情侣互动/价格攻略/装修展示 等
+- 借势当前热点话题（如某首BGM因某条视频爆火），融合季节/人群
+- 推荐时考虑 2024-2026 年真实流行趋势（不是 2020 年老歌）"""
+    user = """本周热门话题（用于判断 BGM 流行趋势）：
+%s
+
+当前：%s
+季节背景：%s
+目标人群：上海应届毕业生、青年白领、情侣租客、上海打工人
+卖点组合：A(地铁口+民用水电+押一付一) / B(拎包入住+健身房+社交公区) / C(租金便宜+采光好+可短租)
+
+请推荐 10 个本周热门 BGM + 10 个本周热门音效。""" % (hot_topics_text, week, season)
+    text = call_deepseek(system, user)
+    if not text:
+        return None
+    data = parse_json_from_text(text)
+    if not data:
+        return None
+    # 校验
+    if not isinstance(data.get("list"), list) or len(data["list"]) == 0:
+        return None
+    if not isinstance(data.get("sfx_list"), list) or len(data["sfx_list"]) == 0:
+        return None
+    # 补全字段
+    for it in data["list"]:
+        it.setdefault("mood", "")
+        it.setdefault("scene", "")
+        it.setdefault("hot", "")
+        it.setdefault("search_key", it.get("name", ""))
+    for it in data["sfx_list"]:
+        it.setdefault("source", "")
+        it.setdefault("scene", "")
+        it.setdefault("search_key", it.get("name", ""))
+    return data
+
+
 def generate_learning(today):
     """学习计划：月度学习目标和今日打卡目标"""
     m = today.month
@@ -527,20 +598,8 @@ def build():
         print("[skip] 全部热榜平台抓取失败，保留旧数据。")
         return False
 
-    # ═══ Step 2: 构建 BGM 名字列表 ═══
-    names = []
-    for k in ("douyin", "rednote"):
-        for it in hotspot.get(k, []):
-            t = (it.get("title") or "").strip()
-            if t:
-                names.append(t)
-    seen = set()
-    dedup = []
-    for n in names:
-        if n not in seen:
-            seen.add(n)
-            dedup.append(n)
-    names = dedup[:BGM_NAME_LIMIT]
+    # ═══ Step 2: 暂不构建 BGM 名字列表（改由 AI 在 Step 4 生成真实 BGM）═══
+    bgm_data = None
 
     # ═══ Step 3: 构建热梗摘要文本（供 DeepSeek prompt 使用）═══
     hot_texts = []
@@ -591,6 +650,10 @@ def build():
             ref_ideas_data = generate_ref_ideas(hot_topics_text, today)
             print("  -> %s" % ("成功" if ref_ideas_data else "跳过(空)"))
 
+            print("[3/4] AI生成: BGM/音效库（10 BGM + 10 音效）...")
+            bgm_data = generate_bgm_list(hot_topics_text, today)
+            print("  -> %s" % ("成功" if bgm_data else "跳过(空)"))
+
             if is_monthly_first:
                 print("[4/4] AI生成: 学习计划（月度更新）...")
                 learning_data = generate_learning(today)
@@ -615,6 +678,12 @@ def build():
         learning_data = old_data["learning"]; ai_stale = True
     if ref_ideas_data is None and old_data and old_data.get("ref_ideas"):
         ref_ideas_data = old_data["ref_ideas"]; ai_stale = True
+    if bgm_data is None and old_data and (old_data.get("bgm") or {}).get("list"):
+        # 保留旧 BGM 数据（BGM 是体验核心，失败时不要清空）
+        old_bgm = old_data.get("bgm") or {}
+        if old_bgm.get("list"):
+            bgm_data = old_bgm
+            ai_stale = True
 
     # 构建 DeepSeek 状态，供前端提示「余额不足 / Key无效」等
     now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -639,7 +708,7 @@ def build():
         "generated_at": now_iso,
         "source": "uapis.cn + deepseek",
         "hotspot": hotspot,
-        "bgm": {"names": names},
+        "bgm": bgm_data or {"list": [], "sfx_list": [], "names": []},
         "deepseek_status": ds_status,
         "ai_stale": ai_stale,
     }
