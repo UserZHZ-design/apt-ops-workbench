@@ -45,6 +45,52 @@ COMPETITORS = [
     {"name": "城家公寓", "desc": "华润旗下，情侣/家庭向内容多"},
 ]
 
+# ── AI 热门工具：GitHub 仓库白名单（按 4 大类）──
+AITOOL_REPOS = {
+    "script": ["langgenius/dify", "lobehub/lobe-chat", "Yidadaa/ChatGPT-Next-Web",
+               "1Panel-dev/MaxKB", "gptscript-ai/gptscript", "geekan/MetaGPT"],
+    "image": ["AUTOMATIC1111/stable-diffusion-webui", "comfyanonymous/ComfyUI",
+              "CompVis/stable-diffusion", "Stability-AI/generative-models",
+              "Kwai-Kolors/Kolors", "invoke-ai/InvokeAI"],
+    "video": ["zai-org/CogVideo", "Wan-Video/Wan2.1", "Huanshere/VideoLingo",
+              "Lightricks/LTX-Video", "KwaiVGI/LivePortrait", "huggingface/diffusers"],
+    "code": ["cline/cline", "All-Hands-AI/OpenHands", "Aider-AI/aider",
+             "continuedev/continue", "openai/codex", "TabbyML/tabby"],
+}
+AITOOL_CATS = [
+    ("script", "✍️ 脚本生成", "AI 写作 / 文案 / 视频脚本生成"),
+    ("image", "🖼️ 图片制作", "文生图 / 图片编辑 / 设计"),
+    ("video", "🎬 视频制作", "文生视频 / 视频翻译 / 数字人"),
+    ("code", "💻 代码制作", "AI 编码助手 / 智能体开发"),
+]
+# 知识库：repo(实际返回名小写) -> (中文名, 优点, 缺点, 付费情况, 付费标签 free/freemium/paid)
+AITOOL_KB = {
+    "langgenius/dify": ("Dify", "可视化编排 AI 工作流/Agent，接入多模型，中文文档完善，社区大", "上手有学习曲线，重度使用需自备服务器", "免费开源自部署 / 云版付费", "freemium"),
+    "lobehub/lobehub": ("LobeChat", "界面美观，聚合 30+ 模型服务商，支持插件与知识库", "高级功能依赖商业 API Key，大文件处理一般", "免费开源（自备 API Key）", "free"),
+    "chatgptnextweb/nextchat": ("NextChat", "Vercel 一键部署，支持多模型，界面清爽", "功能相对基础，深度定制需自研", "完全免费开源（自备 Key）", "free"),
+    "1panel-dev/maxkb": ("MaxKB", "私有化知识库问答，中文场景好，开箱即用", "需维护服务器，检索效果依赖文档质量", "免费开源 / 企业版付费", "freemium"),
+    "gptscript-ai/gptscript": ("GPTScript", "自然语言写自动化脚本，跨工具调用", "生态尚早期，复杂流程需调试", "免费开源", "free"),
+    "foundationagents/metagpt": ("MetaGPT", "多智能体模拟软件团队，输出结构化文档", "依赖 API 成本，复杂项目仍需人工", "免费开源（自备 Key）", "free"),
+    "automatic1111/stable-diffusion-webui": ("SD WebUI", "插件生态最丰富，教程最多，ControlNet/LoRA 控制精细", "需较强显卡（建议 8G+ 显存），新手配置繁琐", "完全免费开源", "free"),
+    "comfy-org/comfyui": ("ComfyUI", "节点式流程可复用，效率高，可控性最强，社区工作流海量", "节点式学习曲线陡，英文界面，排错麻烦", "完全免费开源", "free"),
+    "compvis/stable-diffusion": ("Stable Diffusion", "模型里程碑，本地/云端皆可运行", "单模型需配 WebUI 等界面使用", "免费（注意非商用许可）", "free"),
+    "stability-ai/generative-models": ("SD3 系列", "文生图质量高，支持多尺寸", "SD3 早期许可限制商用，需订阅 API", "模型开源但商用受限 / API 付费", "paid"),
+    "kwai-kolors/kolors": ("可图 Kolors", "中文提示词理解突出，生成中文文字准确", "海外生态小，版本更新较慢", "免费开源 / 云 API 按量付费", "freemium"),
+    "invoke-ai/invokeai": ("InvokeAI", "界面专业统一画布，适合设计师", "硬件要求高，文档更新较慢", "免费开源", "free"),
+    "zai-org/cogvideo": ("CogVideoX", "中文视频生成领先，图文转视频，商用友好", "生成慢，分辨率/时长有限，需较好 GPU", "免费开源 / 智谱云 API 按量付费", "freemium"),
+    "wan-video/wan2.1": ("万相 Wan2.1", "生成质量高、运动流畅，开源权重，多尺寸", "资源消耗大，推理速度一般", "免费开源 / 阿里云 API 付费", "freemium"),
+    "huanshere/videolingo": ("VideoLingo", "一站式翻译+配音+字幕，多语言，社区活跃", "效果依赖所选模型，长视频处理耗时", "免费开源（自备 API Key）", "free"),
+    "lightricks/ltx-video": ("LTX-Video", "低延迟实时生成，配合 ComfyUI 生态", "质量不如顶级闭源，版本迭代快", "免费开源 / 云 API 付费", "freemium"),
+    "klingairesearch/liveportrait": ("LivePortrait", "一张照片驱动表情/姿态，效果逼真，MIT 许可", "仅人像驱动，不能生成完整新视频", "完全免费开源", "free"),
+    "huggingface/diffusers": ("Diffusers", "集文生图/视频/音频一体，模型最全，生态标准", "库级工具需编程，非开箱即用", "完全免费开源（自备算力）", "free"),
+    "cline/cline": ("Cline", "自主读码/改码/跑命令，支持多模型，本地隐私可控", "深度任务消耗 token 多，配置门槛中等", "免费开源（自备 Key）/ 企业版付费", "freemium"),
+    "openhands/openhands": ("OpenHands", "自主完成开发任务（写码/测试/部署），能力强", "复杂任务易偏离，需较强环境与算力", "免费开源（自备 Key）", "free"),
+    "aider-ai/aider": ("Aider", "轻量高效，git 集成自动提交，命令行友好", "无 GUI，需熟悉终端操作", "免费开源（自备 Key）", "free"),
+    "continuedev/continue": ("Continue", "多 IDE 支持，自由切换任意模型，聊天+补全", "体验略逊商业产品（如 Cursor），需手动配置", "免费开源（自备 Key）", "free"),
+    "openai/codex": ("OpenAI Codex", "官方出品，OpenAI 模型能力，终端执行任务", "需 OpenAI Key，国内访问受限，费用较高", "需付费 API / ChatGPT 订阅", "paid"),
+    "tabbyml/tabby": ("Tabby", "私有化部署，代码不出内网，符合企业合规", "补全质量需调优，有显存需求", "免费开源 / 企业版付费", "freemium"),
+}
+
 # ── 工具函数 ──────────────────────────────────────────
 
 
@@ -574,6 +620,45 @@ def generate_learning(today):
     return parse_json_from_text(text)
 
 
+def generate_aitools(today):
+    """AI热门工具：GitHub 仓库实时数据（stars/简介/许可）+ 预置知识库（优缺点/付费）。
+    不依赖 DeepSeek，每周随热榜一起更新。"""
+    token = os.environ.get("GITHUB_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
+    headers = {"User-Agent": "apt-ops-workbench", "Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = "Bearer %s" % token
+    cats = []
+    for cat_id, cat_name, cat_desc in AITOOL_CATS:
+        tools = []
+        for repo in AITOOL_REPOS.get(cat_id, []):
+            try:
+                req = urllib.request.Request("https://api.github.com/repos/%s" % repo, headers=headers)
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    d = json.loads(resp.read().decode("utf-8"))
+                kb = AITOOL_KB.get((d.get("full_name") or "").lower())
+                if not kb:
+                    continue
+                name, pros, cons, pricing, tag = kb
+                tools.append({
+                    "name": name, "repo": d["full_name"], "url": d["html_url"],
+                    "desc": (d.get("description") or "")[:160],
+                    "stars": d["stargazers_count"], "language": d.get("language") or "",
+                    "license": (d.get("license") or {}).get("spdx_id") or "NO-LICENSE",
+                    "pushed_at": (d.get("pushed_at") or "")[:10],
+                    "pros": pros, "cons": cons, "pricing": pricing, "price_tag": tag,
+                })
+                print("  [aitools] %s ★%s" % (repo, d["stargazers_count"]))
+            except Exception as e:
+                print("  [aitools] %s 抓取失败: %s" % (repo, e))
+                continue
+        tools.sort(key=lambda t: -t["stars"])
+        cats.append({"id": cat_id, "name": cat_name, "desc": cat_desc, "tools": tools})
+    if not any(c["tools"] for c in cats):
+        return None
+    now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"generated_at": now_iso, "source": "github", "categories": cats}
+
+
 # ── 主流程 ────────────────────────────────────────────
 
 
@@ -619,6 +704,7 @@ def build():
     competitor_data = None
     learning_data = None
     ref_ideas_data = None
+    aitools_data = None
 
     has_key = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
 
@@ -666,6 +752,11 @@ def build():
     else:
         print("[skip] DEEPSEEK_API_KEY 未配置，所有 AI 模块跳过")
 
+    # ═══ Step 4.5: AI 热门工具（GitHub 实时抓取，不依赖 DeepSeek，每周更新）═══
+    print("[4/5] 抓取 GitHub AI 热门工具 ...")
+    aitools_data = generate_aitools(today)
+    print("  -> %s" % ("成功" if aitools_data else "跳过(空)"))
+
     # 失败时保留旧 AI 数据，并标记 stale（前端会提示"数据非最新"）
     ai_stale = False
     if analysis_data is None and old_data and old_data.get("analysis"):
@@ -676,6 +767,8 @@ def build():
         competitor_data = old_data["competitor"]; ai_stale = True
     if learning_data is None and old_data and old_data.get("learning"):
         learning_data = old_data["learning"]; ai_stale = True
+    if aitools_data is None and old_data and old_data.get("aitools"):
+        aitools_data = old_data["aitools"]; ai_stale = True
     if ref_ideas_data is None and old_data and old_data.get("ref_ideas"):
         ref_ideas_data = old_data["ref_ideas"]; ai_stale = True
     if bgm_data is None and old_data and (old_data.get("bgm") or {}).get("list"):
@@ -723,6 +816,8 @@ def build():
         payload["learning"] = learning_data
     if ref_ideas_data:
         payload["ref_ideas"] = ref_ideas_data
+    if aitools_data:
+        payload["aitools"] = aitools_data
 
     # ═══ Step 6: 写入文件 ═══
     os.makedirs("data", exist_ok=True)
@@ -739,6 +834,8 @@ def build():
         parts.append("竞品监控✅")
     if learning_data:
         parts.append("学习计划✅")
+    if aitools_data:
+        parts.append("AI工具✅")
 
     print("[status] deepseek_status = %s" % json.dumps(ds_status, ensure_ascii=False))
     print("[status] ai_stale = %s" % ai_stale)
