@@ -1674,7 +1674,7 @@ function callZhipuVision(apiKey, accountName, platform, imageDataUrl, extraText)
           { type: 'image_url', image_url: { url: imageDataUrl } }
         ]
       }],
-      max_tokens: 4000,
+      max_tokens: 2000,
       temperature: 0.3
     })
   }).then(function(resp) {
