@@ -663,7 +663,8 @@ def generate_aitools(today):
 
 
 def build():
-    today = datetime.date.today()
+    # 用北京时间（UTC+8）计算"今天"，避免 Actions 环境 UTC 日期在凌晨触发时周次偏差
+    today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).date()
     is_monthly_first = today.day == 1  # 月度第一天触发学习计划更新
 
     # ═══ Step 1: 抓取热榜（基础数据，必须成功）═══
