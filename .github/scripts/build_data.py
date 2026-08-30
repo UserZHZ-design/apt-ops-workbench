@@ -825,7 +825,8 @@ def build():
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
     total_hot = sum(len(v) for v in hotspot.values())
-    parts = ["%d条热榜" % total_hot, "%d个BGM名字" % len(names)]
+    bgm_count = len((bgm_data or {}).get("list", []))
+    parts = ["%d条热榜" % total_hot, "%d个BGM/音效" % bgm_count]
     if analysis_data:
         parts.append("爆款拆解✅")
     if calendar_data:
