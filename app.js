@@ -1,6 +1,7 @@
 ﻿// ==================== 长租公寓运营工作台 v4.0 ====================
 // APP.JS — 独立PWA版 · GitHub Pages免费部署 · 零积分消耗
 // v4.6.3: 移除「数据分析」模块（含历史分析数据清理）
+// v4.6.4: 「学习计划」→「AI热门工具推送」（GitHub 抓取 脚本/图片/视频/代码 4 类，优缺点+付费）
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
@@ -8,7 +9,7 @@ const MODULES = [
   { id:'bgm', name:'BGM管家', desc:'自动更新', icon:'🎵', iconClass:'m2', badge:'每周', badgeClass:'badge-weekly', title:'🎵 BGM与音效管家', subtitle:'热门名字列表 · 点击搜抖音 · 免费API自动抓取', render:renderBGM },
   { id:'analysis', name:'爆款拆解', desc:'AI自动生成', icon:'🔍', iconClass:'m3', badge:'每周', badgeClass:'badge-weekly', title:'🔍 爆款拆解', subtitle:'DeepSeek AI生成 · 高赞+高播放爆款 · 共性归纳', render:renderAnalysis },
   { id:'script', name:'脚本生成', desc:'AI按需生成', icon:'✍️', iconClass:'m4', badge:'按需', badgeClass:'badge-ondemand', title:'✍️ 脚本库', subtitle:'输入话题 → DeepSeek AI生成多风格脚本', render:renderScript },
-  { id:'learning', name:'学习计划', desc:'AI月度生成', icon:'📚', iconClass:'m6', badge:'每月', badgeClass:'badge-monthly', title:'📚 学习计划', subtitle:'DeepSeek AI生成月度目标 · 每日打卡追踪', render:renderLearning },
+  { id:'aitools', name:'AI工具', desc:'GitHub热榜', icon:'🤖', iconClass:'m6', badge:'每周', badgeClass:'badge-weekly', title:'🤖 AI热门工具', subtitle:'GitHub抓取 · 脚本/图片/视频/代码 · 优缺点+付费', render:renderAITools },
   { id:'calendar', name:'选题日历', desc:'AI自动生成', icon:'📅', iconClass:'m7', badge:'每周', badgeClass:'badge-weekly', title:'📅 内容选题日历', subtitle:'DeepSeek AI生成 · 下周7天选题规划·详情', render:renderCalendar },
   { id:'competitor', name:'竞品监控', desc:'AI自动生成', icon:'👁️', iconClass:'m8', badge:'每周', badgeClass:'badge-weekly', title:'👁️ 竞品监控', subtitle:'DeepSeek AI监控4品牌 · 热视频·评论区诉求', render:renderCompetitor },
   { id:'material', name:'素材管理', desc:'归档存储', icon:'📁', iconClass:'m9', badge:'持续', badgeClass:'badge-daily', title:'📁 素材归档', subtitle:'本地存储 · 分类管理 · 热梗/脚本/数据', render:renderMaterial }
@@ -18,13 +19,20 @@ const MODULES = [
 let activeModuleId = null;
 let editMode = false;
 let hideMode = false;
-let moduleOrder = (()=>{ try{ var d=JSON.parse(localStorage.getItem('moduleOrder')||''); if(d&&d.length===8) return d; }catch(e){} return MODULES.map(m=>m.id); })();
+// v4.6.4: 模块集合变化（learning→aitools），旧顺序缓存自动重建
+let moduleOrder = (()=>{ try{ var d=JSON.parse(localStorage.getItem('moduleOrder')||''); if(d&&d.length===8&&d.indexOf('aitools')>-1) return d; }catch(e){} return MODULES.map(m=>m.id); })();
 // v4.6.3: 已移除「数据分析」模块，清理其历史数据（本地分析记录）
 try { localStorage.removeItem('apt_data_analyses'); } catch(e) {}
+// v4.6.4: 「学习计划」→「AI热门工具」，清理旧模块状态
+try {
+  localStorage.removeItem('learningReminders');
+  var hm = JSON.parse(localStorage.getItem('hiddenModules')||'[]')||[];
+  var hm2 = hm.filter(function(id){ return id!=='learning' && id!=='data'; });
+  if (hm2.length !== hm.length) localStorage.setItem('hiddenModules', JSON.stringify(hm2));
+} catch(e) {}
 let hiddenModules = (()=>{ try{ return JSON.parse(localStorage.getItem('hiddenModules')||'[]')||[]; }catch(e){ return []; } })();
 let draggedItem = null;
 let currentPlatform = 'douyin';
-let reminders = (()=>{ try{ return JSON.parse(localStorage.getItem('learningReminders')||'[]')||[]; }catch(e){ return []; } })();
 
 // ===== v4.0 DATA LAYER =====
 // All dynamic content stored in localStorage with defaults.
@@ -1392,237 +1400,115 @@ function formatDate(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
-// ===== 6. LEARNING PLAN =====
-function renderLearning(container) {
-  // 尝试读取 AI 自动生成的学习计划数据
-  var ld = getAutoData('learning');
-  if (ld && ld.today_goals && ld.today_goals.length) {
-    var todayGoals = ld.today_goals;
-    var phases = (ld.phases || []);
-    var completed = todayGoals.filter(function(g){return g.done}).length;
-    var totalTools = 0;
-    if (phases.length) phases.forEach(function(p){ totalTools += (p.tools||'').split('·').length; });
-    else totalTools = 14;
+// ===== 6. AI 热门工具推送（GitHub 实时抓取）=====
+var AITOOLS_META = { refreshing: false };
 
-    var html = '<div class="stats-row">' +
-    '<div class="stat-card"><div class="value">'+completed+'/'+todayGoals.length+'</div><div class="label">📊 计划完成状态</div></div>' +
-    '<div class="stat-card"><div class="value">'+(phases.length||4)+'</div><div class="label">📋 学习阶段</div></div>' +
-    '<div class="stat-card"><div class="value">'+totalTools+'</div><div class="label">🤖 涉及AI工具</div></div>' +
-    '</div>';
-    html += '<div class="section-title" id="learn-goals">🎯 今日目标拆解（AI生成）' + autoUpdateTag('learning') + '</div>';
-    html += '<div id="goalsList">';
-    todayGoals.forEach(function(g) {
-      html += '<div class="checkin-item">'+
-        '<div class="checkin-box '+(g.done?'checked':'')+'" onclick="toggleCheckin(\''+g.id+'\')">'+(g.done?'✓':'')+'</div>'+
-        '<span class="checkin-text '+(g.done?'done':'')+'">'+(g.text||'')+'</span></div>';
-    });
-    html += '</div>';
+function renderAITools(container) {
+  var ad = getAutoData('aitools');
+  var local = null;
+  try { local = JSON.parse(localStorage.getItem('apt_aitools') || '') || null; } catch(e) { local = null; }
+  // 实时抓取过的本地数据优先（stars 更新）
+  if (local && local.categories && local.categories.length) ad = local;
+  var categories = (ad && ad.categories) || [];
+  var totalTools = 0, totalStars = 0;
+  categories.forEach(function(c){ totalTools += (c.tools||[]).length; (c.tools||[]).forEach(function(t){ totalStars += t.stars || 0; }); });
+  var ts = ((ad && ad.generated_at) || '').slice(0,16).replace('T',' ');
 
-    html += '<div class="section-title" id="learn-calendar">📅 学习日历与提醒</div>'+
-      '<div class="reminder-form">'+
-      '<div class="form-row">'+
-        '<label>⏰ 提醒时间</label>'+
-        '<input type="time" id="reminderTime" value="09:00" />'+
-        '<label>🔁 频率</label>'+
-        '<select id="reminderFreq"><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="custom">自定义</option></select>'+
-        '<label>📝 内容</label>'+
-        '<input type="text" id="reminderText" placeholder="如：学习DeepSeek提示词" style="flex:1;min-width:150px;" />'+
-        '<button class="btn-primary" style="padding:8px 16px;font-size:12px;" onclick="addReminder()">+ 添加提醒</button>'+
-      '</div>'+
-      '<div class="reminder-list" id="reminderList"></div></div>';
+  var html = '<div class="stats-row">' +
+    '<div class="stat-card"><div class="value">'+categories.length+'</div><div class="label">🗂️ 工具分类</div></div>' +
+    '<div class="stat-card"><div class="value">'+totalTools+'</div><div class="label">🤖 热门工具</div></div>' +
+    '<div class="stat-card"><div class="value">'+fmtBigNum(totalStars)+'</div><div class="label">⭐ 总 Stars</div></div>' +
+  '</div>';
 
-    html += '<div class="mini-calendar" id="miniCal"></div>';
-    html += '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">🔴 红点表示有提醒 · 蓝色为今天</p>';
+  html += '<div class="content-card" style="margin-bottom:14px;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<div style="flex:1;min-width:220px;">' +
+      '<div style="font-weight:700;font-size:14px;">🔥 近期热门 AI 工具 &amp; Skill</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">数据源：GitHub 实时抓取' + (ts ? ' · 周更 ' + ts : '') + ' · 脚本/图片/视频/代码四大类</div>' +
+    '</div>' +
+    '<button class="btn-primary" style="padding:8px 16px;font-size:13px;" onclick="refreshAITools()" id="aitoolsRefreshBtn">🔄 实时抓取 GitHub</button>' +
+  '</div>';
 
-    if (phases.length) {
-      html += '<div class="section-title" id="learn-timeline">🎯 '+(ld.month||'学习计划总览')+'</div><div class="timeline">';
-      phases.forEach(function(p) {
-        html += '<div class="timeline-item"><div class="timeline-dot">'+(p.icon||'📝')+'</div><div class="timeline-content"><h4>'+(p.week||'')+'：'+(p.title||'')+' <span style="font-size:12px;color:var(--text-muted);">'+(p.status||'')+'</span></h4><p>🎯 '+(p.goal||'')+'</p><p style="margin-top:4px;">🛠️ '+(p.tools||'')+'</p></div></div>';
-      });
-      html += '</div>';
-    }
+  if (!categories.length) {
+    html += '<div class="empty-state"><div class="empty-icon">🔧</div><div class="empty-text">暂无工具数据，点击上方「实时抓取 GitHub」拉取最新热门 AI 工具</div></div>';
     container.innerHTML = html;
     return;
   }
 
-  // 回退：静态硬编码数据
-  var todayGoals = [
-    { id:'g1', text:'DeepSeek生成10条公寓文案（不同风格）', done:false },
-    { id:'g2', text:'学习提示词工程第3章：角色设定+约束条件', done:false },
-    { id:'g3', text:'用即梦AI生成3张封面图素材', done:false },
-    { id:'g4', text:'分析竞品@城家公寓 最新3条视频结构', done:false },
-    { id:'g5', text:'复盘本周数据，整理优化清单', done:true }
-  ];
-
-  var completed = todayGoals.filter(function(g){return g.done}).length;
-  var totalTools = 0;
-  [
-    ['文本生成类',4],['图像生成类',4],['视频创作类',3],['数据分析类',3]
-  ].forEach(function(c){totalTools+=c[1];});
-  var html = '<div class="stats-row">' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'learn-goals\')"><div class="stat-value">'+completed+'/'+todayGoals.length+'</div><div class="stat-label">📊 计划完成状态</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'learn-timeline\')"><div class="stat-value">4</div><div class="stat-label">📋 学习计划总览</div></div>' +
-  '<div class="stat-card" style="cursor:pointer" onclick="scrollToSection(\'learn-tools\')"><div class="stat-value">'+totalTools+'</div><div class="stat-label">🤖 近期热门AI工具</div></div>' +
-  '</div>';
-  html += '<div class="section-title" id="learn-goals">🎯 今日目标拆解</div>';
-  html += '<div id="goalsList">';
-  todayGoals.forEach(function(g) {
-    html += '<div class="checkin-item">'+
-      '<div class="checkin-box '+(g.done?'checked':'')+'" onclick="toggleCheckin(\''+g.id+'\')">'+(g.done?'✓':'')+'</div>'+
-      '<span class="checkin-text '+(g.done?'done':'')+'">'+g.text+'</span></div>';
+  categories.forEach(function(cat) {
+    html += '<div class="section-title" id="cat-'+cat.id+'">'+cat.name+' <span style="font-size:12px;color:var(--text-muted);font-weight:400;">'+cat.desc+'</span></div>';
+    html += '<div class="aitool-grid">';
+    (cat.tools||[]).forEach(function(t){ html += renderAIToolCard(t); });
+    html += '</div>';
   });
-  html += '</div>';
 
-  html += '<div class="section-title" id="learn-calendar">📅 学习日历与提醒</div>'+
-    '<div class="reminder-form">'+
-    '<div class="form-row">'+
-      '<label>⏰ 提醒时间</label>'+
-      '<input type="time" id="reminderTime" value="09:00" />'+
-      '<label>🔁 频率</label>'+
-      '<select id="reminderFreq"><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="custom">自定义</option></select>'+
-      '<label>📝 内容</label>'+
-      '<input type="text" id="reminderText" placeholder="如：学习DeepSeek提示词" style="flex:1;min-width:150px;" />'+
-      '<button class="btn-primary" style="padding:8px 16px;font-size:12px;" onclick="addReminder()">+ 添加提醒</button>'+
-    '</div>'+
-    '<div class="reminder-list" id="reminderList"></div></div>';
-
-  html += '<div class="mini-calendar" id="miniCal"></div>';
-  html += '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">🔴 红点表示有提醒 · 蓝色为今天</p>';
-
-  var phases = [
-    {week:'第1-2周', title:'DeepSeek/Claude 提示词工程', goal:'1天生成10条公寓文案', tools:'DeepSeek · Claude', status:'🟡 进行中', icon:'📝'},
-    {week:'第3-4周', title:'豆包/Kimi + 即梦AI/可灵', goal:'图文笔记全流程AI化', tools:'豆包 · Kimi · 即梦AI · 可灵', status:'⚪ 待开始', icon:'🎨'},
-    {week:'第5-6周', title:'剪映/开拍AI/Dreamina', goal:'独立完成30秒短视频', tools:'剪映 · 开拍AI · Dreamina', status:'⚪ 待开始', icon:'🎬'},
-    {week:'第7-8周', title:'蝉妈妈AI/通义千问', goal:'通过数据反推内容优化', tools:'蝉妈妈AI · 通义千问', status:'⚪ 待开始', icon:'📊'}
-  ];
-  html += '<div class="section-title" id="learn-timeline">🎯 8周AI学习计划总览</div><div class="timeline">';
-  phases.forEach(function(p) {
-    html += '<div class="timeline-item"><div class="timeline-dot">'+p.icon+'</div><div class="timeline-content"><h4>'+p.week+'：'+p.title+' <span style="font-size:12px;color:var(--text-muted);">'+p.status+'</span></h4><p>🎯 '+p.goal+'</p><p style="margin-top:4px;">🛠️ '+p.tools+'</p></div></div>';
-  });
-  html += '</div>';
-
-  html += '<div class="section-title" id="learn-tools">🤖 近期热门AI工具分类与优缺点</div>';
-  var toolCats = [
-    {cat:'文本生成类', tools:[
-      {name:'DeepSeek', pros:'免费开源，中文理解强，逻辑推理优秀', cons:'高峰期响应慢，创意写作略弱'},
-      {name:'Claude', pros:'长文本处理强，写作质量高', cons:'国内访问受限，费用较高'},
-      {name:'豆包', pros:'免费，热点追踪快，抖音生态整合', cons:'深度分析弱，输出偏短'},
-      {name:'Kimi', pros:'超长上下文，文档分析强，免费', cons:'创意内容一般，响应偶有延迟'}
-    ]},
-    {cat:'图像生成类', tools:[
-      {name:'即梦AI', pros:'中文理解好，免费额度多，风格丰富', cons:'细节精度一般'},
-      {name:'可灵AI', pros:'视频生成领先，画质高，动态效果好', cons:'生成慢，费用高'},
-      {name:'Midjourney', pros:'画质顶级，艺术感强', cons:'需翻墙，纯英文，费用高'},
-      {name:'Stable Diffusion', pros:'开源免费，可本地部署，可控性强', cons:'配置门槛高，需好显卡'}
-    ]},
-    {cat:'视频创作类', tools:[
-      {name:'剪映', pros:'免费，模板多，AI字幕准确', cons:'高级功能需付费'},
-      {name:'开拍AI', pros:'口播提词好，智能剪辑快', cons:'功能单一，效果依赖素材质量'},
-      {name:'Dreamina', pros:'AI设计强，封面排版好', cons:'新工具稳定性待验证'}
-    ]},
-    {cat:'数据分析类', tools:[
-      {name:'蝉妈妈AI', pros:'抖音数据全面，竞品分析强', cons:'费用高，免费版功能少'},
-      {name:'通义千问', pros:'免费，数据分析强，阿里生态', cons:'垂直领域不如专业工具'},
-      {name:'New Bing', pros:'免费搜索+AI，实时信息强', cons:'国内访问不稳定'}
-    ]}
-  ];
-
-  html += '<div class="data-table" style="margin-bottom:16px;"><table class="ai-tools-table"><thead><tr><th>工具名称</th><th>✅ 优点</th><th>⚠️ 缺点</th></tr></thead><tbody>';
-  toolCats.forEach(function(cat) {
-    html += '<tr><td colspan="3" style="background:var(--primary-light);font-weight:700;color:var(--primary-dark);font-size:12px;">'+cat.cat+'</td></tr>';
-    cat.tools.forEach(function(t) {
-      html += '<tr><td style="font-weight:600;">'+t.name+'</td><td class="ai-tool-pro">'+t.pros+'</td><td class="ai-tool-con">'+t.cons+'</td></tr>';
-    });
-  });
-  html += '</tbody></table></div>';
-
-  html += '<div class="section-title">🔗 学习资源</div>'+
-    '<div class="source-links" style="background:var(--card);padding:14px 18px;border-radius:var(--radius);">'+
-    sourceLink('https://www.deepseek.com/','DeepSeek官网')+
-    sourceLink('https://www.jianying.com/','剪映官网')+
-    sourceLink('https://tongyi.aliyun.com/','通义千问')+
-    sourceLink('https://jimeng.jianying.com/','即梦AI')+
-    '</div>';
-
+  html += '<p style="font-size:11px;color:var(--text-muted);margin-top:16px;">⚠️ 仓库信息（stars/简介/许可）来自 GitHub 公开数据实时抓取；优缺点与付费情况为整理分析，仅供参考，请以官网为准。</p>';
   container.innerHTML = html;
-  setTimeout(function(){ renderMiniCalendar(); renderReminders(); }, 100);
 }
 
-function toggleCheckin(id) {
-  var el = document.querySelector('[onclick="toggleCheckin(\''+id+'\')"]');
-  if (!el) return;
-  var isDone = el.classList.contains('checked');
-  if (isDone) { el.classList.remove('checked'); el.textContent=''; }
-  else { el.classList.add('checked'); el.textContent='✓'; }
-  var text = el.nextElementSibling;
-  if (text) text.classList.toggle('done');
-  var all = document.querySelectorAll('#goalsList .checkin-box');
-  var done = document.querySelectorAll('#goalsList .checkin-box.checked');
-  var dc = document.getElementById('doneCount');
-  var pp = document.getElementById('progressPct');
-  if (dc) dc.textContent = done.length;
-  if (pp) pp.textContent = Math.round(done.length/all.length*100)+'%';
-  showToast(done.length>all.length/2?'💪 继续加油！':'✅ 打卡成功！');
+function renderAIToolCard(t) {
+  var priceMap = { free:['🆓 免费','price-free'], freemium:['🎁 免费+付费','price-freemium'], paid:['💳 付费','price-paid'] };
+  var pt = priceMap[t.price_tag] || ['💳 '+(t.pricing||'付费'), 'price-paid'];
+  var stars = t.stars >= 10000 ? (t.stars/10000).toFixed(1)+'万' : (t.stars||0).toLocaleString();
+  return '<div class="aitool-card">' +
+    '<div class="aitool-head">' +
+      '<a class="aitool-name" href="'+(t.url||'#')+'" target="_blank" rel="noopener">'+(t.name||t.repo||'')+' ↗</a>' +
+      '<span class="aitool-price '+pt[1]+'">'+pt[0]+'</span>' +
+    '</div>' +
+    '<div class="aitool-repo">'+escapeHtml(t.repo||'')+' · ⭐ '+stars+(t.license?' · '+t.license:'')+(t.language?' · '+t.language:'')+'</div>' +
+    (t.desc ? '<div class="aitool-desc">'+escapeHtml(t.desc)+'</div>' : '') +
+    '<div class="aitool-row"><span class="aitool-tag tag-pro">✅ 优点</span><span>'+t.pros+'</span></div>' +
+    '<div class="aitool-row"><span class="aitool-tag tag-con">⚠️ 缺点</span><span>'+t.cons+'</span></div>' +
+    '<div class="aitool-row"><span class="aitool-tag tag-pay">💰 付费</span><span>'+t.pricing+'</span></div>' +
+  '</div>';
 }
 
-function addReminder() {
-  var time = document.getElementById('reminderTime').value;
-  var freq = document.getElementById('reminderFreq').value;
-  var text = document.getElementById('reminderText').value.trim();
-  if (!text) { showToast('请输入提醒内容'); return; }
-  reminders.push({ id: Date.now(), time: time, freq: freq, text: text });
-  localStorage.setItem('learningReminders', JSON.stringify(reminders));
-  document.getElementById('reminderText').value = '';
-  renderReminders();
-  renderMiniCalendar();
-  showToast('⏰ 提醒已添加');
-  if ('Notification' in window && Notification.permission==='granted') {
-    var parts=time.split(':'); var now=new Date(); var t=new Date();
-    t.setHours(parseInt(parts[0]),parseInt(parts[1]),0,0);
-    if(t<now)t.setDate(t.getDate()+1);
-    setTimeout(function(){new Notification('📚 学习提醒',{body:text,icon:'icon-192.png'});},t-now);
-  } else if ('Notification' in window && Notification.permission!=='denied') {
-    Notification.requestPermission();
+function fmtBigNum(n) {
+  n = n || 0;
+  return n >= 100000000 ? (n/100000000).toFixed(1)+'亿' : n >= 10000 ? (n/10000).toFixed(1)+'万' : n.toLocaleString();
+}
+
+// 前端实时抓取 GitHub 热门 AI 工具（更新 stars/简介，优缺点与付费知识库字段保留）
+function refreshAITools() {
+  if (AITOOLS_META.refreshing) return;
+  var btn = document.getElementById('aitoolsRefreshBtn');
+  AITOOLS_META.refreshing = true;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 抓取中...'; }
+  var queries = {
+    script: 'AI writing assistant LLM',
+    image: 'text-to-image',
+    video: 'text-to-video',
+    code: 'AI coding assistant agent'
+  };
+  var current = getAutoData('aitools') || { categories: [] };
+  try { var loc = JSON.parse(localStorage.getItem('apt_aitools')||''); if (loc && loc.categories) current = loc; } catch(e) {}
+  var byRepo = {};
+  (current.categories||[]).forEach(function(c){ (c.tools||[]).forEach(function(t){ if(t.repo) byRepo[t.repo.toLowerCase()] = t; }); });
+  var done = 0, failed = 0, updated = 0;
+  var keys = Object.keys(queries);
+  keys.forEach(function(cid) {
+    fetch('https://api.github.com/search/repositories?q='+encodeURIComponent(queries[cid])+'&sort=stars&order=desc&per_page=10')
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        (d.items||[]).slice(0,8).forEach(function(it) {
+          var key = (it.full_name||'').toLowerCase();
+          var exist = byRepo[key];
+          if (exist) { exist.stars = it.stargazers_count || exist.stars; exist.desc = (it.description||exist.desc||'').slice(0,160); updated++; }
+        });
+        done++;
+      })
+      .catch(function(){ done++; failed++; })
+      .then(function(){ if (done === keys.length) finish(); });
+  });
+  function finish() {
+    AITOOLS_META.refreshing = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 实时抓取 GitHub'; }
+    if (failed === keys.length) { showToast('❌ 抓取失败，请检查网络后重试'); return; }
+    try { localStorage.setItem('apt_aitools', JSON.stringify(current)); } catch(e) {}
+    showToast('✅ 已实时更新 ' + updated + ' 个工具数据');
+    renderAITools(document.getElementById('contentBody'));
   }
 }
 
-function removeReminder(id) {
-  reminders = reminders.filter(function(r){return r.id!==id});
-  localStorage.setItem('learningReminders', JSON.stringify(reminders));
-  renderReminders();
-  renderMiniCalendar();
-  showToast('已删除提醒');
-}
-
-function renderReminders() {
-  var list = document.getElementById('reminderList');
-  if (!list) return;
-  var freqMap = { daily:'每天', weekdays:'工作日', weekly:'每周', custom:'自定义' };
-  list.innerHTML = reminders.map(function(r){
-    return '<div class="reminder-item"><span>⏰ '+r.time+' · '+freqMap[r.freq]+' · '+r.text+'</span><button class="del-btn" onclick="removeReminder('+r.id+')">×</button></div>';
-  }).join('');
-}
-
-function renderMiniCalendar() {
-  var cal = document.getElementById('miniCal');
-  if (!cal) return;
-  var now = new Date();
-  var year=now.getFullYear(), month=now.getMonth(), today=now.getDate();
-  var firstDay = new Date(year,month,1).getDay();
-  var daysInMonth = new Date(year,month+1,0).getDate();
-  var headers = ['日','一','二','三','四','五','六'];
-  var html = headers.map(function(h){return '<div class="cal-day-header">'+h+'</div>'}).join('');
-  for (var i=0;i<firstDay;i++) html += '<div></div>';
-  for (var d=1;d<=daysInMonth;d++) {
-    var isToday = d===today;
-    var hasReminder = reminders.length>0 && d>=today && d<=today+7;
-    html += '<div class="cal-day '+(isToday?'today':'')+(hasReminder?' has-reminder':'')+'" onclick="selectCalDay('+d+')">'+
-      '<div class="cal-day-num">'+d+'</div>'+(hasReminder?'<div class="cal-day-dot"></div>':'')+'</div>';
-  }
-  cal.innerHTML = html;
-}
-
-function selectCalDay(day) { showToast('📅 '+day+'日 — 点击"添加提醒"设置学习计划'); }
 
 // ===== 7. CALENDAR MODULE =====
 function renderCalendar(container) {
