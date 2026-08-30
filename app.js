@@ -1407,8 +1407,13 @@ function renderAITools(container) {
   var ad = getAutoData('aitools');
   var local = null;
   try { local = JSON.parse(localStorage.getItem('apt_aitools') || '') || null; } catch(e) { local = null; }
-  // 实时抓取过的本地数据优先（stars 更新）
+  // 实时抓取过的本地数据优先（stars 更新），但若 local 为空/异常则用 getAutoData 兜底
   if (local && local.categories && local.categories.length) ad = local;
+  // 兜底：清除历史上被错误缓存的空数据，避免一直显示"暂无工具数据"
+  if (!ad || !ad.categories || !ad.categories.length) {
+    try { localStorage.removeItem('apt_aitools'); } catch(e) {}
+    ad = { categories: [], generated_at: '' };
+  }
   var categories = (ad && ad.categories) || [];
   var totalTools = 0, totalStars = 0;
   categories.forEach(function(c){ totalTools += (c.tools||[]).length; (c.tools||[]).forEach(function(t){ totalStars += t.stars || 0; }); });
@@ -1481,6 +1486,13 @@ function refreshAITools() {
   };
   var current = getAutoData('aitools') || { categories: [] };
   try { var loc = JSON.parse(localStorage.getItem('apt_aitools')||''); if (loc && loc.categories) current = loc; } catch(e) {}
+  // 防止 weeklyDataCache 还没加载完时写入空数据
+  if (!current || !current.categories || !current.categories.length) {
+    AITOOLS_META.refreshing = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 实时抓取 GitHub'; }
+    showToast('⚠️ 工具数据还在加载，请稍后再试');
+    return;
+  }
   var byRepo = {};
   (current.categories||[]).forEach(function(c){ (c.tools||[]).forEach(function(t){ if(t.repo) byRepo[t.repo.toLowerCase()] = t; }); });
   var done = 0, failed = 0, updated = 0;
