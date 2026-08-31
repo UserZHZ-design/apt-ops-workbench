@@ -5,6 +5,7 @@
 // v4.6.5: init() 启动即 fetchWeeklyData，让所有模块（不再仅 hotspot）一开始就有数据
 // v4.6.6: 修复实时热榜合并分支漏掉 aitools → AI工具模块始终无数据；renderAITools 改为独立拉取兜底
 // v4.6.7: 素材管理分类改为可点击折叠（默认折叠，本周热榜默认展开）
+// v4.6.9: 全局版式升级 - 多巴胺低饱和配色 + 线条感统计卡片 + section 区块折叠
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
@@ -208,9 +209,40 @@ function selectModule(id) {
   var body = document.getElementById('contentBody');
   body.innerHTML = '';
   try { mod.render(body); } catch(e) { body.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">渲染错误: '+e.message+'</div></div>'; }
+  // v4.6.9: 区块折叠增强（section-title 点击折叠/展开其后内容）
+  enableSectionCollapse(body);
   body.scrollTop = 0;
   // Mobile: auto-close drawer after selecting
   if (window.innerWidth <= 768) closeSidebar();
+}
+
+// v4.6.9: 模块内所有 .section-title 支持点击折叠/展开其后内容（默认展开）
+function enableSectionCollapse(container) {
+  if (!container) return;
+  var titles = container.querySelectorAll('.section-title');
+  Array.prototype.forEach.call(titles, function(t) {
+    if (t.getAttribute('data-collapse') === 'off') return;
+    if (t.dataset.collapsible === '1') return;
+    t.dataset.collapsible = '1';
+    t.style.cursor = 'pointer';
+    t.title = '点击折叠 / 展开';
+    var arrow = document.createElement('span');
+    arrow.className = 'sec-collapse-arrow';
+    arrow.textContent = '▾';
+    t.appendChild(arrow);
+    t.addEventListener('click', function(ev) {
+      // 不拦截内部链接/按钮/输入交互
+      if (ev.target.closest && ev.target.closest('a,button,input,textarea,select,label')) return;
+      var next = t.nextElementSibling;
+      var targets = [];
+      while (next && !next.classList.contains('section-title')) {
+        targets.push(next);
+        next = next.nextElementSibling;
+      }
+      var collapsed = t.classList.toggle('collapsed');
+      targets.forEach(function(x) { x.style.display = collapsed ? 'none' : ''; });
+    });
+  });
 }
 
 function refreshModule() {
@@ -1484,6 +1516,7 @@ function renderAIToolsWith(container, ad) {
 
   html += '<p style="font-size:11px;color:var(--text-muted);margin-top:16px;">⚠️ 仓库信息（stars/简介/许可）来自 GitHub 公开数据实时抓取；优缺点与付费情况为整理分析，仅供参考，请以官网为准。</p>';
   container.innerHTML = html;
+  enableSectionCollapse(container);
 }
 
 function renderAIToolCard(t) {
