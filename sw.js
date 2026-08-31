@@ -1,5 +1,5 @@
 // Service Worker for 长租公寓运营工作台 PWA
-const CACHE_NAME = 'apt-ops-v60';
+const CACHE_NAME = 'apt-ops-v61';
 const OFFLINE_URL = '/index.html';
 
 const PRE_CACHE = [
@@ -74,6 +74,19 @@ self.addEventListener('fetch', (event) => {
         JSON.stringify({ error: 'offline', timestamp: Date.now() }),
         { status: 503, headers: { 'Content-Type': 'application/json' } }
       ))
+    );
+    return;
+  }
+
+  // 核心脚本 app.js：network-first，确保代码更新即时生效
+  // （否则 cache-first 会让已注册 SW 的设备一直跑旧版本，出现"改了但看不到"）
+  if (event.request.url.includes('/app.js')) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL)))
     );
     return;
   }
