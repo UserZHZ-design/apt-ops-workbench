@@ -209,9 +209,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .week-folder .wf-icon{font-size:16px;}
 .week-folder .wf-label{font-size:10px;color:var(--success);background:var(--success-light);padding:1px 6px;border-radius:8px;font-weight:600;margin-left:auto;}
 .week-folder .wf-range{font-size:11px;color:var(--text-muted);padding-left:22px;}
-.cat-section{margin-bottom:20px;}
-.cat-header{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--border);}
+.cat-section{margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--card);}
+.cat-header{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;padding:12px 16px;margin-bottom:0;border-bottom:0;cursor:pointer;user-select:none;transition:background 0.15s;}
+.cat-header:hover{background:var(--primary-light);}
 .cat-header .cat-count{font-size:11px;color:var(--text-muted);font-weight:400;}
+.cat-header .cat-toggle{font-size:11px;margin-left:auto;color:var(--text-muted);transition:transform 0.2s;display:inline-block;}
+.cat-section.open .cat-toggle{transform:rotate(180deg);}
+.cat-body{display:none;padding:12px 16px;border-top:1px solid var(--border);}
+.cat-section.open .cat-body{display:block;}
+.cat-empty{color:var(--text-muted);font-size:12px;font-style:italic;padding:6px 0;}
 .text-file{padding:10px 12px;border-radius:8px;transition:all var(--transition);border:1px solid var(--border);margin-bottom:6px;background:var(--bg);}
 .text-file:hover{border-color:var(--primary);}
 .text-file .tf-header{display:flex;align-items:center;gap:8px;cursor:pointer;}
@@ -384,7 +390,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
   <button class="install-btn" id="installBtn">📲 立即安装</button>
   <button class="install-close" id="installClose">✕</button>
 </div>
-<script src="app.js?v=63"></script>
+<script src="app.js?v=64"></script>
 <script>
 // Service Worker注册
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').then(r=>console.log('[SW] Registered:',r.scope)).catch(e=>console.warn('[SW] Registration failed:',e))})}
