@@ -2,6 +2,7 @@
 // APP.JS — 独立PWA版 · GitHub Pages免费部署 · 零积分消耗
 // v4.6.3: 移除「数据分析」模块（含历史分析数据清理）
 // v4.6.4: 「学习计划」→「AI热门工具推送」（GitHub 抓取 脚本/图片/视频/代码 4 类，优缺点+付费）
+// v4.6.5: init() 启动即 fetchWeeklyData，让所有模块（不再仅 hotspot）一开始就有数据
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
@@ -83,6 +84,9 @@ function closeSidebar() {
 
 function init() {
   renderSidebar();
+  // v4.6.5: 启动时立即拉取周更数据，让所有模块（不只是热梗）一开始就有最新数据可用
+  // （避免用户先点 AI 工具/其他模块时 weeklyDataCache 还是 null）
+  fetchWeeklyData(false).catch(function(){});
   var firstId = moduleOrder.filter(function(id){return hiddenModules.indexOf(id)===-1})[0] || 'hotspot';
   if (window.innerWidth > 768) selectModule(firstId);
 }
