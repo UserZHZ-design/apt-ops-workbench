@@ -3,6 +3,7 @@
 // v4.6.3: 移除「数据分析」模块（含历史分析数据清理）
 // v4.6.4: 「学习计划」→「AI热门工具推送」（GitHub 抓取 脚本/图片/视频/代码 4 类，优缺点+付费）
 // v4.6.5: init() 启动即 fetchWeeklyData，让所有模块（不再仅 hotspot）一开始就有数据
+// v4.6.6: 修复实时热榜合并分支漏掉 aitools → AI工具模块始终无数据；renderAITools 改为独立拉取兜底
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
@@ -730,13 +731,15 @@ async function fetchWeeklyData(forceLive) {
             try {
               var ld0 = await fetchWeeklyLive();
               if (ld0 && ld0.hotspot && Object.keys(ld0.hotspot).some(function(k){ return (ld0.hotspot[k]||[]).length > 0; })) {
-                // 实时热榜拉取成功，但保留仓库里的 AI 字段（analysis/calendar/competitor/learning + bgm/ref_ideas）
+                // 实时热榜拉取成功，但保留仓库里的 AI 字段（analysis/calendar/competitor/learning + bgm/ref_ideas/aitools）
                 ld0.analysis = d.analysis || null;
                 ld0.calendar = d.calendar || null;
                 ld0.competitor = d.competitor || null;
                 ld0.learning = d.learning || null;
                 if (d.bgm) ld0.bgm = d.bgm;
                 if (d.ref_ideas) ld0.ref_ideas = d.ref_ideas;
+                // v4.6.6: 修复漏掉 aitools 导致 AI 工具模块一直无数据
+                if (d.aitools) ld0.aitools = d.aitools;
                 ld0.ai_stale = true;
                 weeklyDataCache = ld0; saveWeeklyLocal(ld0); return ld0;
               }
@@ -756,6 +759,8 @@ async function fetchWeeklyData(forceLive) {
         ld.calendar = ld.calendar || localKeep.calendar || null;
         ld.competitor = ld.competitor || localKeep.competitor || null;
         ld.learning = ld.learning || localKeep.learning || null;
+        // v4.6.6: 实时拉取也保留 aitools（AI 工具模块）
+        if (!ld.aitools && localKeep.aitools) ld.aitools = localKeep.aitools;
         // v4.5.5 修复：实时拉取也保留 AI 周更的 BGM/音效库（不被实时 hotspot 覆盖）
         if (localKeep.bgm && localKeep.bgm.list) ld.bgm = localKeep.bgm;
         if (localKeep.ref_ideas) ld.ref_ideas = localKeep.ref_ideas;
@@ -1413,11 +1418,37 @@ function renderAITools(container) {
   try { local = JSON.parse(localStorage.getItem('apt_aitools') || '') || null; } catch(e) { local = null; }
   // 实时抓取过的本地数据优先（stars 更新），但若 local 为空/异常则用 getAutoData 兜底
   if (local && local.categories && local.categories.length) ad = local;
-  // 兜底：清除历史上被错误缓存的空数据，避免一直显示"暂无工具数据"
   if (!ad || !ad.categories || !ad.categories.length) {
+    // v4.6.6: weeklyDataCache 可能被"实时热榜合并"分支丢掉了 aitools 字段（旧 bug）
+    // 此处直接独立拉取 latest.json 的 aitools，不再依赖 weeklyDataCache 的合并结果
     try { localStorage.removeItem('apt_aitools'); } catch(e) {}
-    ad = { categories: [], generated_at: '' };
+    renderAIToolsLoading(container);
+    fetch(WEEKLY_JSON + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        var at = d && d.aitools;
+        if (at && at.categories && at.categories.length) {
+          try { localStorage.setItem('apt_aitools', JSON.stringify(at)); } catch(e) {}
+          if (weeklyDataCache) weeklyDataCache.aitools = at;
+          renderAIToolsWith(container, at);
+        } else {
+          renderAIToolsError(container);
+        }
+      })
+      .catch(function(){ renderAIToolsError(container); });
+    return;
   }
+  renderAIToolsWith(container, ad);
+}
+
+function renderAIToolsLoading(container) {
+  container.innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">正在加载工具数据...</div></div>';
+}
+function renderAIToolsError(container) {
+  container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">工具数据加载失败，请检查网络后刷新页面重试</div></div>';
+}
+
+function renderAIToolsWith(container, ad) {
   var categories = (ad && ad.categories) || [];
   var totalTools = 0, totalStars = 0;
   categories.forEach(function(c){ totalTools += (c.tools||[]).length; (c.tools||[]).forEach(function(t){ totalStars += t.stars || 0; }); });
