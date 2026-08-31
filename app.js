@@ -6,17 +6,18 @@
 // v4.6.6: 修复实时热榜合并分支漏掉 aitools → AI工具模块始终无数据；renderAITools 改为独立拉取兜底
 // v4.6.7: 素材管理分类改为可点击折叠（默认折叠，本周热榜默认展开）
 // v4.6.9: 全局版式升级 - 多巴胺低饱和配色 + 线条感统计卡片 + section 区块折叠
+// v4.7.0: 标题栏 icon/title emoji 去重 + 折叠栏改为彩色矩形渐变背景（左侧色条 + 多巴胺渐变）
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
-  { id:'hotspot', name:'热梗捕手', desc:'自动更新', icon:'🔥', iconClass:'m1', badge:'每日', badgeClass:'badge-daily', title:'🔥 热梗捕手', subtitle:'免费API · 抖音/小红书/微博/知乎 · 实时热榜', render:renderHotspot },
-  { id:'bgm', name:'BGM管家', desc:'自动更新', icon:'🎵', iconClass:'m2', badge:'每周', badgeClass:'badge-weekly', title:'🎵 BGM与音效管家', subtitle:'热门名字列表 · 点击搜抖音 · 免费API自动抓取', render:renderBGM },
-  { id:'analysis', name:'爆款拆解', desc:'AI自动生成', icon:'🔍', iconClass:'m3', badge:'每周', badgeClass:'badge-weekly', title:'🔍 爆款拆解', subtitle:'DeepSeek AI生成 · 高赞+高播放爆款 · 共性归纳', render:renderAnalysis },
-  { id:'script', name:'脚本生成', desc:'AI按需生成', icon:'✍️', iconClass:'m4', badge:'按需', badgeClass:'badge-ondemand', title:'✍️ 脚本库', subtitle:'输入话题 → DeepSeek AI生成多风格脚本', render:renderScript },
-  { id:'aitools', name:'AI工具', desc:'GitHub热榜', icon:'🤖', iconClass:'m6', badge:'每周', badgeClass:'badge-weekly', title:'🤖 AI热门工具', subtitle:'GitHub抓取 · 脚本/图片/视频/代码 · 优缺点+付费', render:renderAITools },
-  { id:'calendar', name:'选题日历', desc:'AI自动生成', icon:'📅', iconClass:'m7', badge:'每周', badgeClass:'badge-weekly', title:'📅 内容选题日历', subtitle:'DeepSeek AI生成 · 下周7天选题规划·详情', render:renderCalendar },
-  { id:'competitor', name:'竞品监控', desc:'AI自动生成', icon:'👁️', iconClass:'m8', badge:'每周', badgeClass:'badge-weekly', title:'👁️ 竞品监控', subtitle:'DeepSeek AI监控4品牌 · 热视频·评论区诉求', render:renderCompetitor },
-  { id:'material', name:'素材管理', desc:'归档存储', icon:'📁', iconClass:'m9', badge:'持续', badgeClass:'badge-daily', title:'📁 素材归档', subtitle:'本地存储 · 分类管理 · 热梗/脚本/数据', render:renderMaterial }
+  { id:'hotspot', name:'热梗捕手', desc:'自动更新', icon:'🔥', iconClass:'m1', badge:'每日', badgeClass:'badge-daily', title:'热梗捕手', subtitle:'免费API · 抖音/小红书/微博/知乎 · 实时热榜', render:renderHotspot },
+  { id:'bgm', name:'BGM管家', desc:'自动更新', icon:'🎵', iconClass:'m2', badge:'每周', badgeClass:'badge-weekly', title:'BGM 与音效管家', subtitle:'热门名字列表 · 点击搜抖音 · 免费API自动抓取', render:renderBGM },
+  { id:'analysis', name:'爆款拆解', desc:'AI自动生成', icon:'🔍', iconClass:'m3', badge:'每周', badgeClass:'badge-weekly', title:'爆款拆解', subtitle:'DeepSeek AI生成 · 高赞+高播放爆款 · 共性归纳', render:renderAnalysis },
+  { id:'script', name:'脚本生成', desc:'AI按需生成', icon:'✍️', iconClass:'m4', badge:'按需', badgeClass:'badge-ondemand', title:'脚本库', subtitle:'输入话题 → DeepSeek AI生成多风格脚本', render:renderScript },
+  { id:'aitools', name:'AI工具', desc:'GitHub热榜', icon:'🤖', iconClass:'m6', badge:'每周', badgeClass:'badge-weekly', title:'AI 热门工具', subtitle:'GitHub抓取 · 脚本/图片/视频/代码 · 优缺点+付费', render:renderAITools },
+  { id:'calendar', name:'选题日历', desc:'AI自动生成', icon:'📅', iconClass:'m7', badge:'每周', badgeClass:'badge-weekly', title:'内容选题日历', subtitle:'DeepSeek AI生成 · 下周7天选题规划·详情', render:renderCalendar },
+  { id:'competitor', name:'竞品监控', desc:'AI自动生成', icon:'👁️', iconClass:'m8', badge:'每周', badgeClass:'badge-weekly', title:'竞品监控', subtitle:'DeepSeek AI监控4品牌 · 热视频·评论区诉求', render:renderCompetitor },
+  { id:'material', name:'素材管理', desc:'归档存储', icon:'📁', iconClass:'m9', badge:'持续', badgeClass:'badge-daily', title:'素材归档', subtitle:'本地存储 · 分类管理 · 热梗/脚本/数据', render:renderMaterial }
 ];
 
 // ===== STATE =====
