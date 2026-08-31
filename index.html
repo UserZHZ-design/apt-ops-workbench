@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="公寓运营">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#8b7ef7">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
 <link rel="manifest" href="manifest.json">
@@ -16,17 +16,18 @@
 <title>长租公寓运营工作台</title>
 <style>
 :root {
-  --primary: #6366f1; --primary-light: #eef2ff; --primary-dark: #4f46e5;
-  --accent: #f59e0b; --accent-light: #fffbeb;
-  --success: #10b981; --success-light: #d1fae5;
-  --danger: #ef4444; --danger-light: #fee2e2;
-  --info: #3b82f6; --info-light: #dbeafe;
-  --bg: #f5f5f7; --sidebar: #ffffff; --card: #ffffff;
-  --text: #1f2937; --text-secondary: #6b7280; --text-muted: #9ca3af;
-  --border: #e5e7eb;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04); --shadow: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.06); --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
-  --radius: 12px; --radius-sm: 8px; --radius-lg: 16px;
+  /* v4.6.9: 多巴胺低饱和色板 */
+  --primary: #8b7ef7; --primary-light: #f0edfe; --primary-dark: #6d5ce6;
+  --accent: #f5b26b; --accent-light: #fef5ec;
+  --success: #6fc79a; --success-light: #e3f5ec;
+  --danger: #f1848f; --danger-light: #fdecee;
+  --info: #7db4f7; --info-light: #e8f2fe;
+  --bg: #f7f6fb; --sidebar: #ffffff; --card: #ffffff;
+  --text: #3d3a4e; --text-secondary: #7c7790; --text-muted: #a9a5bb;
+  --border: #ece9f4;
+  --shadow-sm: 0 1px 2px rgba(109,92,230,0.05); --shadow: 0 2px 6px rgba(109,92,230,0.07);
+  --shadow-md: 0 6px 16px rgba(109,92,230,0.10); --shadow-lg: 0 10px 28px rgba(109,92,230,0.12);
+  --radius: 14px; --radius-sm: 9px; --radius-lg: 18px;
   --sidebar-width: 280px; --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -60,7 +61,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .drag-handle:active { cursor:grabbing; }
 .module-item .mod-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; transition:all var(--transition); }
 .module-item.active .mod-icon { transform:scale(1.05); }
-.mod-icon.m1{background:#fef3c7;} .mod-icon.m2{background:#ede9fe;} .mod-icon.m3{background:#fce7f3;} .mod-icon.m4{background:#d1fae5;} .mod-icon.m5{background:#dbeafe;} .mod-icon.m6{background:#fff7ed;} .mod-icon.m7{background:#fce7f3;} .mod-icon.m8{background:#e0e7ff;} .mod-icon.m9{background:#f3f4f6;}
+.mod-icon.m1{background:#fdebd7;} .mod-icon.m2{background:#e9e4fd;} .mod-icon.m3{background:#fce3ef;} .mod-icon.m4{background:#ddf4e8;} .mod-icon.m5{background:#e4effd;} .mod-icon.m6{background:#fdf3d8;} .mod-icon.m7{background:#fce3ef;} .mod-icon.m8{background:#e5e9fc;} .mod-icon.m9{background:#f3f0fa;}
 .module-item .mod-info { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
 .module-item .mod-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .module-item .mod-desc { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -68,7 +69,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .module-item .vis-toggle { width:20px; height:20px; border:none; background:transparent; cursor:pointer; font-size:13px; opacity:0.3; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:opacity var(--transition); }
 .module-item:hover .vis-toggle { opacity:0.7; }
 .module-item .vis-toggle:hover { opacity:1; background:var(--bg); }
-.badge-daily{background:#d1fae5;color:#065f46;} .badge-weekly{background:#dbeafe;color:#1e40af;} .badge-ondemand{background:#fef3c7;color:#92400e;} .badge-monthly{background:#ede9fe;color:#5b21b6;}
+.badge-daily{background:#ddf4e8;color:#2f7d5a;} .badge-weekly{background:#e4effd;color:#3a6fc4;} .badge-ondemand{background:#fdf3d8;color:#a3771e;} .badge-monthly{background:#e9e4fd;color:#6b5bd0;}
 .hidden-section { border-top:1px solid var(--border); padding:8px 10px; flex-shrink:0; max-height:180px; overflow-y:auto; }
 .hidden-section .hidden-title { font-size:10px; color:var(--text-muted); font-weight:600; margin-bottom:4px; text-transform:uppercase; }
 .hidden-module { display:flex; align-items:center; gap:6px; padding:4px 8px; font-size:12px; color:var(--text-secondary); cursor:pointer; border-radius:6px; }
@@ -94,7 +95,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .content-card { background:var(--card); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); border:1px solid var(--border); transition:all var(--transition); display:flex; flex-direction:column; gap:10px; }
 .content-card:hover { box-shadow:var(--shadow-md); border-color:#d1d5db; }
 .content-card .card-tag { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; width:fit-content; }
-.tag-fire{background:#fee2e2;color:#b91c1c;} .tag-idea{background:#fef3c7;color:#92400e;} .tag-skip{background:#f3f4f6;color:#6b7280;} .tag-hot{background:#fee2e2;color:#dc2626;} .tag-trend{background:#dbeafe;color:#2563eb;} .tag-new{background:#d1fae5;color:#065f46;} .tag-tip{background:#ede9fe;color:#6d28d9;}
+.tag-fire{background:#fde3e3;color:#c05252;} .tag-idea{background:#fdf3d8;color:#a3771e;} .tag-skip{background:#f1f0f6;color:#7c7790;} .tag-hot{background:#fde3e3;color:#c05252;} .tag-trend{background:#e4effd;color:#3a6fc4;} .tag-new{background:#ddf4e8;color:#2f7d5a;} .tag-tip{background:#e9e4fd;color:#6b5bd0;}
 .content-card h3 { font-size:15px; font-weight:700; line-height:1.4; }
 .content-card p { font-size:13px; color:var(--text-secondary); line-height:1.6; }
 .content-card .card-meta { display:flex; align-items:center; gap:12px; font-size:11px; color:var(--text-muted); flex-wrap:wrap; }
@@ -114,15 +115,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .caption-box .cap-text { font-size:13px; line-height:1.7; color:var(--text); }
 .caption-box .cap-copy { font-size:11px; color:var(--primary); cursor:pointer; margin-top:6px; display:inline-flex; align-items:center; gap:3px; }
 
-.stats-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-.stat-card { flex:1; min-width:120px; background:var(--card); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow); border:1px solid var(--border); }
-.stat-card .stat-value { font-size:24px; font-weight:800; line-height:1; }
-.stat-card .stat-label { font-size:11px; color:var(--text-muted); margin-top:4px; }
+/* v4.6.9: 线条设计感统计卡片 */
+.stats-row { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:22px; }
+.stat-card {
+  flex:1; min-width:120px;
+  position:relative;
+  background:var(--card);
+  border-radius:var(--radius);
+  padding:16px 18px 14px;
+  box-shadow:var(--shadow-sm);
+  border:1px solid var(--border);
+  overflow:hidden;
+  cursor:pointer;
+  transition:all var(--transition);
+}
+/* 左侧线条装饰 */
+.stat-card::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
+  background:linear-gradient(180deg, var(--primary) 0%, var(--accent) 100%);
+  opacity:.85;
+  border-radius:0 4px 4px 0;
+}
+/* 顶部细线 */
+.stat-card::after {
+  content:''; position:absolute; left:0; right:0; top:0; height:3px;
+  background:linear-gradient(90deg, var(--primary) 0%, var(--accent) 55%, var(--info) 100%);
+  opacity:.5;
+}
+.stat-card .stat-value {
+  font-size:26px; font-weight:800; line-height:1;
+  background:linear-gradient(135deg, var(--text) 0%, var(--primary-dark) 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label { font-size:11px; color:var(--text-muted); margin-top:6px; letter-spacing:.3px; font-weight:600; }
 .stat-card .stat-change { font-size:11px; font-weight:600; margin-top:2px; }
 .stat-change.up{color:var(--danger);} .stat-change.down{color:var(--success);}
-.stat-card{cursor:pointer;transition:all var(--transition);}
-.stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--primary);}
-@media (max-width:768px){.stat-card{min-width:60px;padding:6px 8px;}.stat-card .stat-value{font-size:16px;}.stat-card .stat-label{font-size:9px;}}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--primary);}
+.stat-card:hover::after{opacity:.8;}
+@media (max-width:768px){.stat-card{min-width:60px;padding:10px 12px;}.stat-card .stat-value{font-size:18px;}.stat-card .stat-label{font-size:10px;}}
 
 /* Table */
 .data-table { width:100%; background:var(--card); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); border:1px solid var(--border); }
@@ -131,8 +161,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .data-table td { font-size:13px; padding:12px 16px; border-bottom:1px solid #f3f4f6; }
 .data-table tr:last-child td{border-bottom:none;} .data-table tr:hover td{background:#fafbfc;}
 
-.section-title{font-size:14px;font-weight:700;margin:24px 0 12px;display:flex;align-items:center;gap:8px;}
+.section-title{font-size:14px;font-weight:700;margin:24px 0 12px;display:flex;align-items:center;gap:8px;user-select:none;}
 .section-title:first-child{margin-top:0;}
+/* v4.6.9: 区块折叠（点击标题折叠/展开其后内容） */
+.sec-collapse-arrow{font-size:12px;color:var(--text-muted);margin-left:auto;transition:transform 0.2s;display:inline-flex;opacity:.7;}
+.section-title:hover{color:var(--primary-dark);}
+.section-title:hover .sec-collapse-arrow{opacity:1;}
+.section-title.collapsed .sec-collapse-arrow{transform:rotate(-90deg);}
 
 /* Script */
 .script-card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow-sm);}
@@ -439,7 +474,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
   <button class="install-btn" id="installBtn">📲 立即安装</button>
   <button class="install-close" id="installClose">✕</button>
 </div>
-<script src="app.js?v=65"></script>
+<script src="app.js?v=66"></script>
 <script>
 // Service Worker注册
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').then(r=>console.log('[SW] Registered:',r.scope)).catch(e=>console.warn('[SW] Registration failed:',e))})}
