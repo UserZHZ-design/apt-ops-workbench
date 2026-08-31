@@ -4,6 +4,7 @@
 // v4.6.4: 「学习计划」→「AI热门工具推送」（GitHub 抓取 脚本/图片/视频/代码 4 类，优缺点+付费）
 // v4.6.5: init() 启动即 fetchWeeklyData，让所有模块（不再仅 hotspot）一开始就有数据
 // v4.6.6: 修复实时热榜合并分支漏掉 aitools → AI工具模块始终无数据；renderAITools 改为独立拉取兜底
+// v4.6.7: 素材管理分类改为可点击折叠（默认折叠，本周热榜默认展开）
 
 // ===== MODULE DEFINITIONS =====
 const MODULES = [
@@ -2129,34 +2130,44 @@ function renderMaterial(container) {
     main.innerHTML = '<div style="margin-bottom:16px;padding:12px 16px;background:var(--primary-light);border-radius:8px;font-size:14px;font-weight:600;color:var(--primary-dark);">\ud83d\udcc1 \u7b2c' + current.week + '\u5468\u6570\u636e\u5b58\u6863 (' + current.dateRange + ')' + (current.label ? ' \u00b7 ' + current.label : '') + '</div>';
 
     current.categories.forEach(function(cat) {
-      var catHtml = '<div class="cat-section"><div class="cat-header">' + cat.name + ' <span class="cat-count">(' + cat.files.length + '\u9879)</span></div>';
+      // v4.6.7: 每个分类可点击折叠（默认折叠，本周热榜默认展开）
+      var isOpen = cat.id === 'hotspot';
+      var catHtml = '<div class="cat-section' + (isOpen ? ' open' : '') + '">' +
+        '<div class="cat-header" onclick="this.parentElement.classList.toggle(\'open\')">' +
+        '<span class="cat-name">' + cat.name + '</span>' +
+        '<span class="cat-count">(' + cat.files.length + '\u9879)</span>' +
+        '<span class="cat-toggle">▼</span>' +
+        '</div>' +
+        '<div class="cat-body">';
 
-      if (cat.type === 'text') {
+      if (cat.files.length === 0) {
+        catHtml += '<div class="cat-empty">本周暂无数据</div>';
+      } else if (cat.type === 'text') {
         cat.files.forEach(function(file, fi) {
           var fid = 'tf-' + current.week + '-' + cat.id + '-' + fi;
           var encoded = encodeURIComponent(file.content).replace(/'/g, '%27').replace(/"/g, '%22');
           catHtml += '<div class="text-file" id="' + fid + '">' +
             '<div class="tf-header" onclick="(function(el){el.parentElement.classList.toggle(\'open\');})(this)">' +
-            '<span class="tf-icon">\ud83d\udcc4</span>' +
+            '<span class="tf-icon">📄</span>' +
             '<span class="tf-name">' + file.name + '</span>' +
             '<span class="tf-date">' + file.date + '</span>' +
-            '<span class="tf-expand">\u25bc</span>' +
+            '<span class="tf-expand">▼</span>' +
             '</div>' +
-            '<div class="tf-content">' + file.content.replace(/</g, '&lt;') + '<br><button class="tf-copy-btn" data-copy="' + encoded + '">\ud83d\udccb \u590d\u5236\u5168\u6587</button></div>' +
+            '<div class="tf-content">' + file.content.replace(/</g, '&lt;') + '<br><button class="tf-copy-btn" data-copy="' + encoded + '">📋 复制全文</button></div>' +
             '</div>';
         });
       } else {
         cat.files.forEach(function(file) {
-          var icon = mediaIcons[file.type] || '\ud83d\udcc1';
+          var icon = mediaIcons[file.type] || '📁';
           catHtml += '<div class="cloud-file">' +
             '<div class="file-icon">' + icon + '</div>' +
-            '<div class="file-info"><div class="file-name">' + file.name + '</div><div class="file-meta">' + file.size + ' \u00b7 ' + file.date + '</div></div>' +
-            '<div class="file-actions"><button class="dl-btn" onclick="simulateDownload(\'' + file.name + '\')">\u2b07\ufe0f \u4e0b\u8f7d</button></div>' +
+            '<div class="file-info"><div class="file-name">' + file.name + '</div><div class="file-meta">' + file.size + ' · ' + file.date + '</div></div>' +
+            '<div class="file-actions"><button class="dl-btn" onclick="simulateDownload(\'' + file.name + '\')">⬇️ 下载</button></div>' +
             '</div>';
         });
       }
 
-      catHtml += '</div>';
+      catHtml += '</div></div>';
       main.innerHTML += catHtml;
     });
   }
