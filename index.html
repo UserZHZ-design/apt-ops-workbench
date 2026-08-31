@@ -384,7 +384,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
   <button class="install-btn" id="installBtn">📲 立即安装</button>
   <button class="install-close" id="installClose">✕</button>
 </div>
-<script src="app.js"></script>
+<script src="app.js?v=61"></script>
 <script>
 // Service Worker注册
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').then(r=>console.log('[SW] Registered:',r.scope)).catch(e=>console.warn('[SW] Registration failed:',e))})}
